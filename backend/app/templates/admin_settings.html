@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统设置</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 720px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    h2 { margin-top: 0; }
+    label { display: block; margin-top: 16px; font-size: 14px; }
+    input, textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb; }
+    button { margin-top: 20px; padding: 10px 16px; background: #1c1d1f; color: #fff; border: none; border-radius: 8px; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/news">资讯管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>系统设置</h2>
+    <form method="post">
+      <label>微信 AppID</label>
+      <input type="text" name="wechat_appid" value="{{ settings.wechat_appid }}" />
+      <label>微信 Secret</label>
+      <input type="password" name="wechat_secret" value="{{ settings.wechat_secret }}" />
+      <label>天气地理编码接口</label>
+      <input type="text" name="weather_geo_url" value="{{ settings.weather_geo_url }}" />
+      <label>天气接口</label>
+      <input type="text" name="weather_api_url" value="{{ settings.weather_api_url }}" />
+      <label>资讯抓取开关（true/false）</label>
+      <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />
+      <label>资讯来源模式（rss/mcp）</label>
+      <input type="text" name="news_source_mode" value="{{ settings.news_source_mode }}" />
+      <label>订阅链接（逗号分隔）</label>
+      <textarea name="news_feed_urls" rows="3">{{ settings.news_feed_urls }}</textarea>
+      <label>MCP 开关（true/false）</label>
+      <input type="text" name="mcp_enabled" value="{{ settings.mcp_enabled }}" />
+      <label>MCP Base URL</label>
+      <input type="text" name="mcp_base_url" value="{{ settings.mcp_base_url }}" />
+      <label>MCP API Key</label>
+      <input type="password" name="mcp_api_key" value="{{ settings.mcp_api_key }}" />
+      <label>MCP 搜索关键词（逗号分隔）</label>
+      <input type="text" name="mcp_keywords" value="{{ settings.mcp_keywords }}" />
+      <h3>AI 接口配置</h3>
+      <label>DeepSeek Base URL</label>
+      <input type="text" name="ai_deepseek_base_url" value="{{ settings.ai_deepseek_base_url }}" />
+      <label>DeepSeek API Key</label>
+      <input type="password" name="ai_deepseek_api_key" value="{{ settings.ai_deepseek_api_key }}" />
+      <label>DeepSeek Model</label>
+      <input type="text" name="ai_deepseek_model" value="{{ settings.ai_deepseek_model }}" />
+      <label>GLM Base URL</label>
+      <input type="text" name="ai_glm_base_url" value="{{ settings.ai_glm_base_url }}" />
+      <label>GLM API Key</label>
+      <input type="password" name="ai_glm_api_key" value="{{ settings.ai_glm_api_key }}" />
+      <label>GLM Model</label>
+      <input type="text" name="ai_glm_model" value="{{ settings.ai_glm_model }}" />
+      <label>OpenAI 兼容 Base URL</label>
+      <input type="text" name="ai_openai_base_url" value="{{ settings.ai_openai_base_url }}" />
+      <label>OpenAI 兼容 API Key</label>
+      <input type="password" name="ai_openai_api_key" value="{{ settings.ai_openai_api_key }}" />
+      <label>OpenAI 兼容 Model</label>
+      <input type="text" name="ai_openai_model" value="{{ settings.ai_openai_model }}" />
+      <h3>AI 路由策略</h3>
+      <label>资讯模块 Provider（deepseek/glm/openai）</label>
+      <input type="text" name="ai_route_news" value="{{ settings.ai_route_news }}" />
+      <label>天气模块 Provider（deepseek/glm/openai）</label>
+      <input type="text" name="ai_route_weather" value="{{ settings.ai_route_weather }}" />
+      <label>日程模块 Provider（deepseek/glm/openai）</label>
+      <input type="text" name="ai_route_schedule" value="{{ settings.ai_route_schedule }}" />
+      <button type="submit">保存设置</button>
+    </form>
+  </div>
+</body>
+</html>
