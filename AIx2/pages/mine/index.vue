@@ -3,8 +3,8 @@
     <view class="profile">
       <view class="avatar"></view>
       <view>
-        <text class="name">未登录</text>
-        <text class="desc">登录后管理你的偏好</text>
+        <text class="name">{{ username }}</text>
+        <text class="desc">{{ description }}</text>
       </view>
     </view>
 
@@ -23,14 +23,54 @@
       </view>
     </view>
 
-    <button class="logout" type="default">退出登录</button>
+    <button v-if="!isLoggedIn" class="login" type="default" @click="goLogin">登录 / 注册</button>
+    <button v-else class="logout" type="default" @click="handleLogout">退出登录</button>
   </view>
 </template>
 
 <script>
+import { request } from '../../utils/request'
+
 export default {
   data() {
-    return {}
+    return {
+      isLoggedIn: false,
+      username: '未登录',
+      description: '登录后管理你的偏好'
+    }
+  },
+  onShow() {
+    this.refreshProfile()
+  },
+  methods: {
+    refreshProfile() {
+      const token = uni.getStorageSync('token')
+      this.isLoggedIn = Boolean(token)
+      if (!token) {
+        this.username = '未登录'
+        this.description = '登录后管理你的偏好'
+        return
+      }
+      request({ url: '/api/user/profile' })
+        .then((res) => {
+          this.username = res.username || '已登录'
+          this.description = '账号信息已同步'
+        })
+        .catch(() => {
+          this.username = '已登录'
+          this.description = '账号信息获取失败'
+        })
+    },
+    goLogin() {
+      uni.navigateTo({ url: '/pages/auth/login' })
+    },
+    handleLogout() {
+      uni.removeStorageSync('token')
+      this.isLoggedIn = false
+      this.username = '未登录'
+      this.description = '登录后管理你的偏好'
+      uni.showToast({ title: '已退出登录', icon: 'none' })
+    }
   }
 }
 </script>
@@ -88,6 +128,12 @@ export default {
   margin-top: 32rpx;
   background: #fef2f2;
   color: #d92d20;
+  border: none;
+}
+.login {
+  margin-top: 32rpx;
+  background: #1c1d1f;
+  color: #fff;
   border: none;
 }
 </style>

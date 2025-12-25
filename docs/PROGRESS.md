@@ -31,3 +31,27 @@
 - 遗留问题：
   - 管理后台界面待实现
   - 真实图标待替换
+
+## Phase 2
+- 状态：已完成
+- 完成内容：
+  - 账号密码注册/登录接口
+  - 微信登录接口（需要配置 wechat_appid / wechat_secret）
+  - 前端登录/注册页面与 token 持久化
+- 文件清单：
+  - backend/requirements.txt
+  - backend/app/config.py
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/auth/login.vue
+  - AIx2/pages/auth/register.vue
+  - AIx2/pages/mine/index.vue
+  - AIx2/pages.json
+  - AIx2/utils/request.js
+  - docs/API.md
+- 下一步：
+  - Phase 3 天气接口与位置设置
+- 遗留问题：
+  - 微信登录需配置真实 AppID/Secret

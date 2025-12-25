@@ -12,3 +12,4 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     location = Column(String(128), default="")
     subscriptions = Column(String(512), default="")
+    wechat_openid = Column(String(128), unique=True, nullable=True, index=True)

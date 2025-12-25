@@ -7,6 +7,10 @@
 ```json
 { "detail": "错误信息" }
 ```
+- 需要认证的接口在 Header 中携带：
+```
+Authorization: Bearer <token>
+```
 
 ## 认证
 ### POST /api/auth/register
@@ -32,7 +36,7 @@
 ```
 
 ### POST /api/auth/wechat_login
-- 说明：微信登录（Phase 2 完善）
+- 说明：微信登录（需要配置 wechat_appid / wechat_secret）
 - Body:
 ```json
 { "code": "string" }
