@@ -215,3 +215,18 @@
   - docs/PROGRESS.md
 - 下一步：
   - 增加告警/通知机制
+
+## Fix Phase 1
+- 状态：已完成
+- 完成内容：
+  - 输出 docs/PLAN_FIX.md（本轮修复增强规划）
+  - 更新 docs/API.md 增量接口草案
+  - 提供接口一致性清单（PLAN_FIX 中）
+- 文件清单：
+  - docs/PLAN_FIX.md
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 2 管理后台增强（手动触发、定时任务、用户 CRUD、MCP/天气配置）
+- 风险：
+  - 后续接口变更需严格同步前端与文档
