@@ -110,3 +110,4 @@ Authorization: Bearer <token>
 ### /admin/settings
 ### /admin/users
 ### /admin/logout
+### /admin/news

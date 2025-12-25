@@ -238,6 +238,23 @@ def schedule_from_ai(db: Session, source_filename: str, content: str) -> schemas
         return build_schedule_plan(source_filename)
 
 
+def news_summary_from_ai(db: Session, title: str, content: str) -> str:
+    route = get_route(db, "ai_route_news", "deepseek")
+    if not provider_ready(db, route):
+        return content[:120] if content else "暂无摘要"
+    provider = build_provider(route, db)
+    prompt = (
+        "请为以下资讯生成不超过60字的中文摘要："
+        f"标题：{title}\n内容：{content}\n"
+        "仅返回摘要文本。"
+    )
+    try:
+        text = provider.generate(prompt)
+        return text.strip()[:120] if text else "暂无摘要"
+    except Exception:
+        return content[:120] if content else "暂无摘要"
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -525,4 +542,46 @@ def admin_users(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         "admin_users.html",
         {"request": request, "users": users},
+    )
+
+
+@app.get("/admin/news")
+def admin_news(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse(
+        "admin_news.html",
+        {"request": request, "message": ""},
+    )
+
+
+@app.post("/admin/news")
+def admin_news_post(
+    request: Request,
+    title: str = Form(...),
+    url: str = Form(...),
+    source: str = Form(...),
+    published_at: str = Form(...),
+    tags: str = Form(""),
+    content: str = Form(""),
+    summary: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    final_summary = summary.strip() or news_summary_from_ai(db, title, content)
+    crud.create_news_item(
+        db,
+        title=title,
+        summary=final_summary,
+        source=source,
+        url=url,
+        published_at=published_at,
+        tags=[tag.strip() for tag in tags.split(",") if tag.strip()],
+    )
+    return templates.TemplateResponse(
+        "admin_news.html",
+        {"request": request, "message": "资讯已保存"},
     )

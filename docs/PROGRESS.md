@@ -147,3 +147,18 @@
   - docs/PROGRESS.md
 - 下一步：
   - 资讯聚合与 AI 摘要整合
+
+## Phase 8
+- 状态：已完成
+- 完成内容：
+  - 管理后台新增资讯管理与 AI 摘要生成
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_news.html
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_users.html
+  - docs/ADMIN_GUIDE.md
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 资讯自动抓取与定时任务
