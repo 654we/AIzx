@@ -162,3 +162,18 @@
   - docs/PROGRESS.md
 - 下一步：
   - 资讯自动抓取与定时任务
+
+## Phase 9
+- 状态：已完成
+- 完成内容：
+  - 资讯 RSS 抓取与定时任务
+  - 自动摘要接入 AI Provider（可降级）
+- 文件清单：
+  - backend/app/news_crawler.py
+  - backend/app/main.py
+  - backend/app/crud.py
+  - backend/requirements.txt
+  - docs/ADMIN_GUIDE.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 完善 MCP 搜索与爬虫模式

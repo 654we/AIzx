@@ -9,12 +9,14 @@ from fastapi import Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from apscheduler.schedulers.background import BackgroundScheduler
 from starlette.middleware.sessions import SessionMiddleware
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.ai_router import build_provider, get_route, provider_ready
+from app.news_crawler import crawl_feeds
 from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
@@ -23,6 +25,7 @@ from app.deps import get_db
 app = FastAPI(title=settings.app_name)
 app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+scheduler = BackgroundScheduler()
 security = HTTPBearer()
 
 
@@ -47,6 +50,13 @@ def startup_event() -> None:
             )
     finally:
         db.close()
+    scheduler.add_job(run_news_crawler, "interval", minutes=30, id="news_crawler", replace_existing=True)
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    scheduler.shutdown(wait=False)
 
 
 def fetch_wechat_openid(code: str) -> str:
@@ -253,6 +263,23 @@ def news_summary_from_ai(db: Session, title: str, content: str) -> str:
         return text.strip()[:120] if text else "暂无摘要"
     except Exception:
         return content[:120] if content else "暂无摘要"
+
+
+def run_news_crawler() -> None:
+    db = next(get_db())
+    try:
+        enabled = crud.get_setting(db, "news_crawler_enabled")
+        if not enabled or enabled.value.lower() != "true":
+            return
+        feed_setting = crud.get_setting(db, "news_feed_urls")
+        if not feed_setting or not feed_setting.value:
+            return
+        feeds = [item.strip() for item in feed_setting.value.split(",") if item.strip()]
+        if not feeds:
+            return
+        crawl_feeds(db, feeds, lambda title, content: news_summary_from_ai(db, title, content))
+    finally:
+        db.close()
 
 
 def get_current_user(

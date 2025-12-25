@@ -62,6 +62,10 @@ def create_news_item(
     return item
 
 
+def get_news_by_url(db: Session, url: str) -> models.NewsItem | None:
+    return db.query(models.NewsItem).filter(models.NewsItem.url == url).first()
+
+
 def list_news(db: Session, tags: list[str], page: int, page_size: int) -> tuple[list[models.NewsItem], int]:
     query = db.query(models.NewsItem)
     if tags:
