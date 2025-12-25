@@ -109,3 +109,4 @@ Authorization: Bearer <token>
 ### /admin/login
 ### /admin/settings
 ### /admin/users
+### /admin/logout

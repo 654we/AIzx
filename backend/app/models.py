@@ -36,3 +36,11 @@ class SchedulePlan(Base):
     source_filename = Column(String(256), nullable=False)
     payload = Column(Text, nullable=False)
     created_at = Column(String(64), nullable=False)
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(128), unique=True, nullable=False)
+    value = Column(Text, nullable=False)

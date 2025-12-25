@@ -5,7 +5,11 @@ from datetime import datetime, timedelta
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi import UploadFile
+from fastapi import Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -16,6 +20,8 @@ from app.database import init_db
 from app.deps import get_db
 
 app = FastAPI(title=settings.app_name)
+app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 security = HTTPBearer()
 
 
@@ -354,4 +360,91 @@ def update_subscriptions(
 
 @app.post("/admin/login")
 def admin_login(request: Request):
-    return {"message": "admin login placeholder", "path": str(request.url)}
+    return templates.TemplateResponse("admin_login.html", {"request": request, "error": ""})
+
+
+@app.post("/admin/login")
+def admin_login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = crud.authenticate_user(db, username, password)
+    if not user or not user.is_admin:
+        return templates.TemplateResponse(
+            "admin_login.html",
+            {"request": request, "error": "账号或密码错误"},
+        )
+    request.session["admin_user"] = user.username
+    return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
+
+
+def require_admin(request: Request):
+    if not request.session.get("admin_user"):
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_302_FOUND)
+    return None
+
+
+@app.get("/admin/logout")
+def admin_logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/admin/login", status_code=status.HTTP_302_FOUND)
+
+
+@app.get("/admin/settings")
+def admin_settings(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    def setting_value(key: str, default: str) -> str:
+        item = crud.get_setting(db, key)
+        return item.value if item else default
+
+    settings_map = {
+        "wechat_appid": setting_value("wechat_appid", ""),
+        "wechat_secret": setting_value("wechat_secret", ""),
+        "weather_geo_url": setting_value("weather_geo_url", settings.weather_geo_url),
+        "weather_api_url": setting_value("weather_api_url", settings.weather_api_url),
+        "news_crawler_enabled": setting_value("news_crawler_enabled", "false"),
+        "news_feed_urls": setting_value("news_feed_urls", ""),
+    }
+    return templates.TemplateResponse(
+        "admin_settings.html",
+        {"request": request, "settings": settings_map},
+    )
+
+
+@app.post("/admin/settings")
+def admin_settings_post(
+    request: Request,
+    wechat_appid: str = Form(""),
+    wechat_secret: str = Form(""),
+    weather_geo_url: str = Form(""),
+    weather_api_url: str = Form(""),
+    news_crawler_enabled: str = Form("false"),
+    news_feed_urls: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    crud.upsert_setting(db, "wechat_appid", wechat_appid)
+    crud.upsert_setting(db, "wechat_secret", wechat_secret)
+    crud.upsert_setting(db, "weather_geo_url", weather_geo_url)
+    crud.upsert_setting(db, "weather_api_url", weather_api_url)
+    crud.upsert_setting(db, "news_crawler_enabled", news_crawler_enabled)
+    crud.upsert_setting(db, "news_feed_urls", news_feed_urls)
+    return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
+
+
+@app.get("/admin/users")
+def admin_users(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    users = crud.list_users(db)
+    return templates.TemplateResponse(
+        "admin_users.html",
+        {"request": request, "users": users},
+    )

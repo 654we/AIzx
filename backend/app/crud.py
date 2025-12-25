@@ -106,6 +106,26 @@ def get_latest_schedule(db: Session, user_id: int) -> models.SchedulePlan | None
     )
 
 
+def get_setting(db: Session, key: str) -> models.Setting | None:
+    return db.query(models.Setting).filter(models.Setting.key == key).first()
+
+
+def upsert_setting(db: Session, key: str, value: str) -> models.Setting:
+    setting = get_setting(db, key)
+    if setting:
+        setting.value = value
+    else:
+        setting = models.Setting(key=key, value=value)
+        db.add(setting)
+    db.commit()
+    db.refresh(setting)
+    return setting
+
+
+def list_users(db: Session) -> list[models.User]:
+    return db.query(models.User).order_by(models.User.id.asc()).all()
+
+
 def authenticate_user(db: Session, username: str, password: str) -> models.User | None:
     user = get_user_by_username(db, username)
     if not user:

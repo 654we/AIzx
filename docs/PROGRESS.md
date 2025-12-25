@@ -110,3 +110,24 @@
   - Phase 6 管理后台完善
 - 遗留问题：
   - 日程解析与 AI 生成逻辑待补充
+
+## Phase 6
+- 状态：已完成
+- 完成内容：
+  - 管理后台登录、系统设置、用户管理页面
+  - 基于数据库的配置持久化
+  - 新增管理后台使用与用户说明文档
+- 文件清单：
+  - backend/app/config.py
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - backend/app/templates/admin_login.html
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_users.html
+  - backend/requirements.txt
+  - docs/ADMIN_GUIDE.md
+  - docs/USER_GUIDE.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 补充 AI 路由策略与配置项详情

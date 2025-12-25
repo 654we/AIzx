@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户管理</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 720px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>用户管理</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>账号</th>
+          <th>是否管理员</th>
+          <th>位置</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.id }}</td>
+          <td>{{ user.username }}</td>
+          <td>{{ '是' if user.is_admin else '否' }}</td>
+          <td>{{ user.location }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
