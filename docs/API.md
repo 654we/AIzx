@@ -11,6 +11,8 @@
 ```
 Authorization: Bearer <token>
 ```
+- 健康检查：
+  - GET /api/health
 
 ## 认证
 ### POST /api/auth/register
@@ -106,8 +108,11 @@ Authorization: Bearer <token>
 - Header: Authorization Bearer token
 
 ## 管理后台
-### /admin/login
-### /admin/settings
-### /admin/users
-### /admin/logout
-### /admin/news
+### GET /admin/login
+### POST /admin/login
+### GET /admin/logout
+### GET/POST /admin/settings
+- 配置项（摘要）：微信配置、天气配置、资讯抓取开关与来源模式、MCP 配置、AI Provider 配置、AI 路由策略
+### GET /admin/users
+### GET/POST /admin/news
+- 说明：手动新增资讯，可选自动摘要
