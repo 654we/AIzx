@@ -14,6 +14,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.ai import DeepSeekProvider, GLMProvider, OpenAICompatProvider, ProviderConfig
 from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
@@ -408,6 +409,18 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "weather_api_url": setting_value("weather_api_url", settings.weather_api_url),
         "news_crawler_enabled": setting_value("news_crawler_enabled", "false"),
         "news_feed_urls": setting_value("news_feed_urls", ""),
+        "ai_deepseek_api_key": setting_value("ai_deepseek_api_key", ""),
+        "ai_deepseek_base_url": setting_value("ai_deepseek_base_url", "https://api.deepseek.com"),
+        "ai_deepseek_model": setting_value("ai_deepseek_model", "deepseek-chat"),
+        "ai_glm_api_key": setting_value("ai_glm_api_key", ""),
+        "ai_glm_base_url": setting_value("ai_glm_base_url", "https://open.bigmodel.cn/api/paas/v4"),
+        "ai_glm_model": setting_value("ai_glm_model", "glm-4"),
+        "ai_openai_api_key": setting_value("ai_openai_api_key", ""),
+        "ai_openai_base_url": setting_value("ai_openai_base_url", "https://api.openai.com/v1"),
+        "ai_openai_model": setting_value("ai_openai_model", "gpt-4o-mini"),
+        "ai_route_news": setting_value("ai_route_news", "deepseek"),
+        "ai_route_weather": setting_value("ai_route_weather", "openai"),
+        "ai_route_schedule": setting_value("ai_route_schedule", "glm"),
     }
     return templates.TemplateResponse(
         "admin_settings.html",
@@ -424,6 +437,18 @@ def admin_settings_post(
     weather_api_url: str = Form(""),
     news_crawler_enabled: str = Form("false"),
     news_feed_urls: str = Form(""),
+    ai_deepseek_api_key: str = Form(""),
+    ai_deepseek_base_url: str = Form(""),
+    ai_deepseek_model: str = Form(""),
+    ai_glm_api_key: str = Form(""),
+    ai_glm_base_url: str = Form(""),
+    ai_glm_model: str = Form(""),
+    ai_openai_api_key: str = Form(""),
+    ai_openai_base_url: str = Form(""),
+    ai_openai_model: str = Form(""),
+    ai_route_news: str = Form("deepseek"),
+    ai_route_weather: str = Form("openai"),
+    ai_route_schedule: str = Form("glm"),
     db: Session = Depends(get_db),
 ):
     redirect = require_admin(request)
@@ -435,6 +460,18 @@ def admin_settings_post(
     crud.upsert_setting(db, "weather_api_url", weather_api_url)
     crud.upsert_setting(db, "news_crawler_enabled", news_crawler_enabled)
     crud.upsert_setting(db, "news_feed_urls", news_feed_urls)
+    crud.upsert_setting(db, "ai_deepseek_api_key", ai_deepseek_api_key)
+    crud.upsert_setting(db, "ai_deepseek_base_url", ai_deepseek_base_url)
+    crud.upsert_setting(db, "ai_deepseek_model", ai_deepseek_model)
+    crud.upsert_setting(db, "ai_glm_api_key", ai_glm_api_key)
+    crud.upsert_setting(db, "ai_glm_base_url", ai_glm_base_url)
+    crud.upsert_setting(db, "ai_glm_model", ai_glm_model)
+    crud.upsert_setting(db, "ai_openai_api_key", ai_openai_api_key)
+    crud.upsert_setting(db, "ai_openai_base_url", ai_openai_base_url)
+    crud.upsert_setting(db, "ai_openai_model", ai_openai_model)
+    crud.upsert_setting(db, "ai_route_news", ai_route_news)
+    crud.upsert_setting(db, "ai_route_weather", ai_route_weather)
+    crud.upsert_setting(db, "ai_route_schedule", ai_route_schedule)
     return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
 
 
