@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -129,6 +130,271 @@ def upsert_setting(db: Session, key: str, value: str) -> models.Setting:
 def list_users(db: Session) -> list[models.User]:
     return db.query(models.User).order_by(models.User.id.asc()).all()
 
+
+def list_users_filtered(db: Session, query: str | None = None) -> list[models.User]:
+    base = db.query(models.User)
+    if query:
+        base = base.filter(models.User.username.contains(query))
+    return base.order_by(models.User.id.asc()).all()
+
+
+def get_user_by_id(db: Session, user_id: int) -> models.User | None:
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def set_user_active(db: Session, user: models.User, is_active: bool) -> models.User:
+    user.is_active = is_active
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_profile(
+    db: Session,
+    user: models.User,
+    username: str,
+    location: str,
+    subscriptions: list[str],
+) -> models.User:
+    user.username = username
+    user.location = location
+    user.subscriptions = ",".join(subscriptions)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def reset_user_password(db: Session, user: models.User, new_password: str) -> models.User:
+    user.password_hash = hash_password(new_password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def create_task_run(
+    db: Session,
+    task_type: str,
+    status: str,
+    duration_ms: int,
+    error_message: str,
+    log_excerpt: str,
+    payload_json: str,
+) -> models.TaskRun:
+    run = models.TaskRun(
+        task_type=task_type,
+        status=status,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        log_excerpt=log_excerpt,
+        payload_json=payload_json,
+        created_at=datetime.now().isoformat(),
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def list_task_runs(db: Session, limit: int = 20) -> list[models.TaskRun]:
+    return (
+        db.query(models.TaskRun)
+        .order_by(models.TaskRun.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def create_weather_provider(
+    db: Session,
+    name: str,
+    provider_type: str,
+    base_url: str,
+    api_key: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+    extra_config: str,
+) -> models.WeatherProvider:
+    provider = models.WeatherProvider(
+        name=name,
+        provider_type=provider_type,
+        base_url=base_url,
+        api_key=api_key,
+        timeout_sec=timeout_sec,
+        enabled=enabled,
+        priority=priority,
+        extra_config=extra_config,
+    )
+    db.add(provider)
+    db.commit()
+    db.refresh(provider)
+    return provider
+
+
+def list_weather_providers(db: Session) -> list[models.WeatherProvider]:
+    return db.query(models.WeatherProvider).order_by(models.WeatherProvider.priority.asc()).all()
+
+
+def get_weather_provider(db: Session, provider_id: int) -> models.WeatherProvider | None:
+    return db.query(models.WeatherProvider).filter(models.WeatherProvider.id == provider_id).first()
+
+
+def update_weather_provider(
+    db: Session,
+    provider: models.WeatherProvider,
+    name: str,
+    provider_type: str,
+    base_url: str,
+    api_key: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+    extra_config: str,
+) -> models.WeatherProvider:
+    provider.name = name
+    provider.provider_type = provider_type
+    provider.base_url = base_url
+    provider.api_key = api_key
+    provider.timeout_sec = timeout_sec
+    provider.enabled = enabled
+    provider.priority = priority
+    provider.extra_config = extra_config
+    db.add(provider)
+    db.commit()
+    db.refresh(provider)
+    return provider
+
+
+def delete_weather_provider(db: Session, provider: models.WeatherProvider) -> None:
+    db.delete(provider)
+    db.commit()
+
+
+def create_mcp_remote(
+    db: Session,
+    name: str,
+    base_url: str,
+    auth_type: str,
+    auth_value: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+) -> models.MCPRemoteConfig:
+    remote = models.MCPRemoteConfig(
+        name=name,
+        base_url=base_url,
+        auth_type=auth_type,
+        auth_value=auth_value,
+        timeout_sec=timeout_sec,
+        enabled=enabled,
+        priority=priority,
+    )
+    db.add(remote)
+    db.commit()
+    db.refresh(remote)
+    return remote
+
+
+def list_mcp_remotes(db: Session) -> list[models.MCPRemoteConfig]:
+    return db.query(models.MCPRemoteConfig).order_by(models.MCPRemoteConfig.priority.asc()).all()
+
+
+def get_mcp_remote(db: Session, remote_id: int) -> models.MCPRemoteConfig | None:
+    return db.query(models.MCPRemoteConfig).filter(models.MCPRemoteConfig.id == remote_id).first()
+
+
+def update_mcp_remote(
+    db: Session,
+    remote: models.MCPRemoteConfig,
+    name: str,
+    base_url: str,
+    auth_type: str,
+    auth_value: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+) -> models.MCPRemoteConfig:
+    remote.name = name
+    remote.base_url = base_url
+    remote.auth_type = auth_type
+    remote.auth_value = auth_value
+    remote.timeout_sec = timeout_sec
+    remote.enabled = enabled
+    remote.priority = priority
+    db.add(remote)
+    db.commit()
+    db.refresh(remote)
+    return remote
+
+
+def delete_mcp_remote(db: Session, remote: models.MCPRemoteConfig) -> None:
+    db.delete(remote)
+    db.commit()
+
+
+def create_mcp_local(
+    db: Session,
+    name: str,
+    module_path: str,
+    capabilities: str,
+    schema: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+) -> models.MCPLocalPlugin:
+    local = models.MCPLocalPlugin(
+        name=name,
+        module_path=module_path,
+        capabilities=capabilities,
+        schema=schema,
+        timeout_sec=timeout_sec,
+        enabled=enabled,
+        priority=priority,
+    )
+    db.add(local)
+    db.commit()
+    db.refresh(local)
+    return local
+
+
+def list_mcp_locals(db: Session) -> list[models.MCPLocalPlugin]:
+    return db.query(models.MCPLocalPlugin).order_by(models.MCPLocalPlugin.priority.asc()).all()
+
+
+def get_mcp_local(db: Session, local_id: int) -> models.MCPLocalPlugin | None:
+    return db.query(models.MCPLocalPlugin).filter(models.MCPLocalPlugin.id == local_id).first()
+
+
+def update_mcp_local(
+    db: Session,
+    local: models.MCPLocalPlugin,
+    name: str,
+    module_path: str,
+    capabilities: str,
+    schema: str,
+    timeout_sec: int,
+    enabled: bool,
+    priority: int,
+) -> models.MCPLocalPlugin:
+    local.name = name
+    local.module_path = module_path
+    local.capabilities = capabilities
+    local.schema = schema
+    local.timeout_sec = timeout_sec
+    local.enabled = enabled
+    local.priority = priority
+    db.add(local)
+    db.commit()
+    db.refresh(local)
+    return local
+
+
+def delete_mcp_local(db: Session, local: models.MCPLocalPlugin) -> None:
+    db.delete(local)
+    db.commit()
 
 def authenticate_user(db: Session, username: str, password: str) -> models.User | None:
     user = get_user_by_username(db, username)

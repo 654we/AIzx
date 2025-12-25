@@ -19,6 +19,10 @@
   <div class="container">
     <div class="nav">
       <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
       <a href="/admin/users">用户管理</a>
       <a href="/admin/news">资讯管理</a>
       <a href="/admin/logout">退出</a>
@@ -35,6 +39,18 @@
       <input type="text" name="weather_api_url" value="{{ settings.weather_api_url }}" />
       <label>资讯抓取开关（true/false）</label>
       <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />
+      <label>资讯抓取 Cron（五段式，优先于间隔）</label>
+      <input type="text" name="news_crawler_cron" value="{{ settings.news_crawler_cron }}" />
+      <label>资讯抓取间隔（分钟）</label>
+      <input type="text" name="news_crawler_interval_minutes" value="{{ settings.news_crawler_interval_minutes }}" />
+      <label>资讯抓取条数上限</label>
+      <input type="text" name="news_crawler_limit" value="{{ settings.news_crawler_limit }}" />
+      <label>资讯来源：RSS（true/false）</label>
+      <input type="text" name="news_source_rss" value="{{ settings.news_source_rss }}" />
+      <label>资讯来源：MCP（true/false）</label>
+      <input type="text" name="news_source_mcp" value="{{ settings.news_source_mcp }}" />
+      <label>资讯来源：订阅链接（true/false）</label>
+      <input type="text" name="news_source_feeds" value="{{ settings.news_source_feeds }}" />
       <label>资讯来源模式（rss/mcp）</label>
       <input type="text" name="news_source_mode" value="{{ settings.news_source_mode }}" />
       <label>订阅链接（逗号分隔）</label>

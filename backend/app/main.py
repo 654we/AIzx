@@ -1,15 +1,17 @@
 import json
 import os
+import time
 from datetime import datetime, timedelta
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi import UploadFile
 from fastapi import Form
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from starlette.middleware.sessions import SessionMiddleware
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -22,12 +24,60 @@ from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
 from app.deps import get_db
+from app.mcp.registry import MCPPluginError, test_plugin
 
 app = FastAPI(title=settings.app_name)
 app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 scheduler = BackgroundScheduler()
 security = HTTPBearer()
+
+
+def _setting_value(db: Session, key: str, default: str) -> str:
+    item = crud.get_setting(db, key)
+    return item.value if item else default
+
+
+def _setting_bool(db: Session, key: str, default: str = "false") -> bool:
+    return _setting_value(db, key, default).lower() == "true"
+
+
+def _ensure_setting(db: Session, key: str, default: str) -> None:
+    if not crud.get_setting(db, key):
+        crud.upsert_setting(db, key, default)
+
+
+def configure_news_scheduler(db: Session) -> dict:
+    _ensure_setting(db, "news_crawler_enabled", "false")
+    _ensure_setting(db, "news_crawler_cron", "")
+    _ensure_setting(db, "news_crawler_interval_minutes", "30")
+    _ensure_setting(db, "news_crawler_limit", "20")
+    _ensure_setting(db, "news_source_rss", "true")
+    _ensure_setting(db, "news_source_mcp", "false")
+    _ensure_setting(db, "news_source_feeds", "true")
+    cron_expr = _setting_value(db, "news_crawler_cron", "")
+    interval_minutes = int(_setting_value(db, "news_crawler_interval_minutes", "30") or 30)
+    if scheduler.get_job("news_crawler"):
+        scheduler.remove_job("news_crawler")
+    if cron_expr:
+        scheduler.add_job(
+            run_news_crawler,
+            CronTrigger.from_crontab(cron_expr),
+            id="news_crawler",
+            replace_existing=True,
+        )
+    else:
+        scheduler.add_job(
+            run_news_crawler,
+            "interval",
+            minutes=interval_minutes,
+            id="news_crawler",
+            replace_existing=True,
+        )
+    if not scheduler.running:
+        scheduler.start(paused=False)
+    job = scheduler.get_job("news_crawler")
+    return {"next_run_at": job.next_run_time.isoformat() if job else ""}
 
 
 @app.on_event("startup")
@@ -51,8 +101,11 @@ def startup_event() -> None:
             )
     finally:
         db.close()
-    scheduler.add_job(run_news_crawler, "interval", minutes=30, id="news_crawler", replace_existing=True)
-    scheduler.start()
+    db = next(get_db())
+    try:
+        configure_news_scheduler(db)
+    finally:
+        db.close()
 
 
 @app.on_event("shutdown")
@@ -266,26 +319,34 @@ def news_summary_from_ai(db: Session, title: str, content: str) -> str:
         return content[:120] if content else "暂无摘要"
 
 
-def run_news_crawler() -> None:
+def run_news_crawler(limit: int | None = None, force_run: bool = False) -> dict:
     db = next(get_db())
+    created = 0
+    used_sources = []
     try:
-        mode_setting = crud.get_setting(db, "news_source_mode")
-        mode = mode_setting.value if mode_setting else "rss"
-        enabled = crud.get_setting(db, "news_crawler_enabled")
-        if not enabled or enabled.value.lower() != "true":
-            return
-        if mode == "mcp":
+        enabled = _setting_bool(db, "news_crawler_enabled", "false")
+        if not enabled and not force_run:
+            return {"created": 0, "sources": []}
+        sources = {
+            "rss": _setting_bool(db, "news_source_rss", "true"),
+            "mcp": _setting_bool(db, "news_source_mcp", "false"),
+            "feeds": _setting_bool(db, "news_source_feeds", "true"),
+        }
+        if sources["mcp"]:
             search_news_via_mcp(db, news_summary_from_ai)
-            return
+            used_sources.append("mcp")
         feed_setting = crud.get_setting(db, "news_feed_urls")
         if not feed_setting or not feed_setting.value:
-            return
+            return {"created": created, "sources": used_sources}
         feeds = [item.strip() for item in feed_setting.value.split(",") if item.strip()]
         if not feeds:
-            return
-        crawl_feeds(db, feeds, lambda title, content: news_summary_from_ai(db, title, content))
+            return {"created": created, "sources": used_sources}
+        created += crawl_feeds(db, feeds, lambda title, content: news_summary_from_ai(db, title, content), limit=limit)
+        if sources["rss"] or sources["feeds"]:
+            used_sources.append("rss")
     finally:
         db.close()
+    return {"created": created, "sources": used_sources}
 
 
 def get_current_user(
@@ -303,6 +364,8 @@ def get_current_user(
     user = crud.get_user_by_username(db, username)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User disabled")
     return user
 
 
@@ -478,10 +541,28 @@ def require_admin(request: Request):
     return None
 
 
+def require_admin_json(request: Request) -> None:
+    if not request.session.get("admin_user"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin required")
+
+
 @app.get("/admin/logout")
 def admin_logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/admin/login", status_code=status.HTTP_302_FOUND)
+
+
+def _task_run_to_dict(run: models.TaskRun) -> dict:
+    return {
+        "id": run.id,
+        "task_type": run.task_type,
+        "status": run.status,
+        "duration_ms": run.duration_ms,
+        "error_message": run.error_message,
+        "log_excerpt": run.log_excerpt,
+        "payload_json": run.payload_json,
+        "created_at": run.created_at,
+    }
 
 
 @app.get("/admin/settings")
@@ -499,6 +580,12 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "weather_geo_url": setting_value("weather_geo_url", settings.weather_geo_url),
         "weather_api_url": setting_value("weather_api_url", settings.weather_api_url),
         "news_crawler_enabled": setting_value("news_crawler_enabled", "false"),
+        "news_crawler_cron": setting_value("news_crawler_cron", ""),
+        "news_crawler_interval_minutes": setting_value("news_crawler_interval_minutes", "30"),
+        "news_crawler_limit": setting_value("news_crawler_limit", "20"),
+        "news_source_rss": setting_value("news_source_rss", "true"),
+        "news_source_mcp": setting_value("news_source_mcp", "false"),
+        "news_source_feeds": setting_value("news_source_feeds", "true"),
         "news_feed_urls": setting_value("news_feed_urls", ""),
         "news_source_mode": setting_value("news_source_mode", "rss"),
         "mcp_enabled": setting_value("mcp_enabled", "false"),
@@ -532,6 +619,12 @@ def admin_settings_post(
     weather_geo_url: str = Form(""),
     weather_api_url: str = Form(""),
     news_crawler_enabled: str = Form("false"),
+    news_crawler_cron: str = Form(""),
+    news_crawler_interval_minutes: str = Form("30"),
+    news_crawler_limit: str = Form("20"),
+    news_source_rss: str = Form("true"),
+    news_source_mcp: str = Form("false"),
+    news_source_feeds: str = Form("true"),
     news_feed_urls: str = Form(""),
     news_source_mode: str = Form("rss"),
     mcp_enabled: str = Form("false"),
@@ -560,6 +653,12 @@ def admin_settings_post(
     crud.upsert_setting(db, "weather_geo_url", weather_geo_url)
     crud.upsert_setting(db, "weather_api_url", weather_api_url)
     crud.upsert_setting(db, "news_crawler_enabled", news_crawler_enabled)
+    crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
+    crud.upsert_setting(db, "news_crawler_interval_minutes", news_crawler_interval_minutes)
+    crud.upsert_setting(db, "news_crawler_limit", news_crawler_limit)
+    crud.upsert_setting(db, "news_source_rss", news_source_rss)
+    crud.upsert_setting(db, "news_source_mcp", news_source_mcp)
+    crud.upsert_setting(db, "news_source_feeds", news_source_feeds)
     crud.upsert_setting(db, "news_feed_urls", news_feed_urls)
     crud.upsert_setting(db, "news_source_mode", news_source_mode)
     crud.upsert_setting(db, "mcp_enabled", mcp_enabled)
@@ -578,18 +677,167 @@ def admin_settings_post(
     crud.upsert_setting(db, "ai_route_news", ai_route_news)
     crud.upsert_setting(db, "ai_route_weather", ai_route_weather)
     crud.upsert_setting(db, "ai_route_schedule", ai_route_schedule)
+    configure_news_scheduler(db)
     return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
 
 
 @app.get("/admin/users")
-def admin_users(request: Request, db: Session = Depends(get_db)):
+def admin_users(request: Request, q: str | None = None, db: Session = Depends(get_db)):
     redirect = require_admin(request)
     if redirect:
         return redirect
-    users = crud.list_users(db)
+    users = crud.list_users_filtered(db, q)
     return templates.TemplateResponse(
         "admin_users.html",
-        {"request": request, "users": users},
+        {"request": request, "users": users, "query": q or ""},
+    )
+
+
+@app.get("/admin/users/{user_id}")
+def admin_user_detail(user_id: int, request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse(
+        "admin_user_detail.html",
+        {
+            "request": request,
+            "user": user,
+            "subscriptions": user.subscriptions,
+            "message": "",
+        },
+    )
+
+
+@app.post("/admin/users/{user_id}")
+def admin_user_detail_post(
+    user_id: int,
+    request: Request,
+    username: str = Form(...),
+    location: str = Form(""),
+    subscriptions: str = Form(""),
+    is_active: str = Form("true"),
+    reset_password: str = Form(""),
+    action: str = Form("update"),
+    db: Session = Depends(get_db),
+):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+    if action == "deactivate":
+        crud.set_user_active(db, user, False)
+        message = "用户已停用"
+    else:
+        updated_user = crud.update_user_profile(
+            db,
+            user,
+            username=username,
+            location=location,
+            subscriptions=[tag.strip() for tag in subscriptions.split(",") if tag.strip()],
+        )
+        if reset_password:
+            crud.reset_user_password(db, updated_user, reset_password)
+        crud.set_user_active(db, updated_user, is_active.lower() == "true")
+        message = "用户信息已更新"
+    return templates.TemplateResponse(
+        "admin_user_detail.html",
+        {
+            "request": request,
+            "user": crud.get_user_by_id(db, user_id),
+            "subscriptions": subscriptions,
+            "message": message,
+        },
+    )
+
+
+@app.get("/admin/tasks")
+def admin_tasks(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    runs = crud.list_task_runs(db, limit=20)
+    return templates.TemplateResponse(
+        "admin_tasks.html",
+        {"request": request, "runs": runs, "message": ""},
+    )
+
+
+@app.get("/admin/scheduler")
+def admin_scheduler(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    scheduler_info = configure_news_scheduler(db)
+    settings_map = {
+        "news_crawler_enabled": _setting_value(db, "news_crawler_enabled", "false"),
+        "news_crawler_cron": _setting_value(db, "news_crawler_cron", ""),
+        "news_crawler_interval_minutes": _setting_value(db, "news_crawler_interval_minutes", "30"),
+        "news_crawler_limit": _setting_value(db, "news_crawler_limit", "20"),
+        "news_source_rss": _setting_value(db, "news_source_rss", "true"),
+        "news_source_mcp": _setting_value(db, "news_source_mcp", "false"),
+        "news_source_feeds": _setting_value(db, "news_source_feeds", "true"),
+        "next_run_at": scheduler_info.get("next_run_at", ""),
+    }
+    return templates.TemplateResponse(
+        "admin_scheduler.html",
+        {"request": request, "settings": settings_map},
+    )
+
+
+@app.post("/admin/scheduler")
+def admin_scheduler_post(
+    request: Request,
+    news_crawler_enabled: str = Form("false"),
+    news_crawler_cron: str = Form(""),
+    news_crawler_interval_minutes: str = Form("30"),
+    news_crawler_limit: str = Form("20"),
+    news_source_rss: str = Form("true"),
+    news_source_mcp: str = Form("false"),
+    news_source_feeds: str = Form("true"),
+    db: Session = Depends(get_db),
+):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    crud.upsert_setting(db, "news_crawler_enabled", news_crawler_enabled)
+    crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
+    crud.upsert_setting(db, "news_crawler_interval_minutes", news_crawler_interval_minutes)
+    crud.upsert_setting(db, "news_crawler_limit", news_crawler_limit)
+    crud.upsert_setting(db, "news_source_rss", news_source_rss)
+    crud.upsert_setting(db, "news_source_mcp", news_source_mcp)
+    crud.upsert_setting(db, "news_source_feeds", news_source_feeds)
+    configure_news_scheduler(db)
+    return RedirectResponse(url="/admin/scheduler", status_code=status.HTTP_302_FOUND)
+
+
+@app.get("/admin/mcp")
+def admin_mcp(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    remotes = crud.list_mcp_remotes(db)
+    locals_ = crud.list_mcp_locals(db)
+    return templates.TemplateResponse(
+        "admin_mcp.html",
+        {"request": request, "remotes": remotes, "locals": locals_},
+    )
+
+
+@app.get("/admin/weather")
+def admin_weather(request: Request, db: Session = Depends(get_db)):
+    redirect = require_admin(request)
+    if redirect:
+        return redirect
+    providers = crud.list_weather_providers(db)
+    return templates.TemplateResponse(
+        "admin_weather.html",
+        {"request": request, "providers": providers},
     )
 
 
@@ -633,3 +881,481 @@ def admin_news_post(
         "admin_news.html",
         {"request": request, "message": "资讯已保存"},
     )
+
+
+@app.post("/admin/api/tasks/news_crawl")
+async def admin_task_news_crawl(
+    request: Request,
+    payload: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    start = time.time()
+    limit = int(payload.get("limit") or _setting_value(db, "news_crawler_limit", "20"))
+    result = {}
+    error_message = ""
+    try:
+        result = run_news_crawler(limit=limit, force_run=True)
+        status_text = "success"
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    run = crud.create_task_run(
+        db,
+        task_type="news_crawl",
+        status=status_text,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        log_excerpt=json.dumps(result, ensure_ascii=False),
+        payload_json=json.dumps(payload, ensure_ascii=False),
+    )
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message, "log_excerpt": run.log_excerpt, "task_run_id": run.id}
+
+
+@app.post("/admin/api/tasks/weather_refresh")
+async def admin_task_weather_refresh(
+    request: Request,
+    payload: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    start = time.time()
+    location = payload.get("location", "")
+    error_message = ""
+    try:
+        fetch_weather(db, location)
+        status_text = "success"
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    run = crud.create_task_run(
+        db,
+        task_type="weather_refresh",
+        status=status_text,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        log_excerpt="",
+        payload_json=json.dumps(payload, ensure_ascii=False),
+    )
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message, "log_excerpt": run.log_excerpt, "task_run_id": run.id}
+
+
+@app.post("/admin/api/tasks/schedule_analyze")
+async def admin_task_schedule_analyze(
+    request: Request,
+    payload: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    start = time.time()
+    error_message = ""
+    try:
+        user_id = int(payload.get("user_id") or 0)
+        plan = crud.get_latest_schedule(db, user_id) if user_id else None
+        status_text = "success" if plan else "failed"
+        if not plan:
+            error_message = "未找到可分析的日程计划"
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    run = crud.create_task_run(
+        db,
+        task_type="schedule_analyze",
+        status=status_text,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        log_excerpt="",
+        payload_json=json.dumps(payload, ensure_ascii=False),
+    )
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message, "log_excerpt": run.log_excerpt, "task_run_id": run.id}
+
+
+@app.get("/admin/api/scheduler")
+def admin_api_scheduler(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    scheduler_info = configure_news_scheduler(db)
+    return {
+        "news_crawler_enabled": _setting_bool(db, "news_crawler_enabled", "false"),
+        "cron": _setting_value(db, "news_crawler_cron", ""),
+        "interval_minutes": int(_setting_value(db, "news_crawler_interval_minutes", "30") or 30),
+        "limit": int(_setting_value(db, "news_crawler_limit", "20") or 20),
+        "sources": {
+            "rss": _setting_bool(db, "news_source_rss", "true"),
+            "mcp": _setting_bool(db, "news_source_mcp", "false"),
+            "feeds": _setting_bool(db, "news_source_feeds", "true"),
+        },
+        "next_run_at": scheduler_info.get("next_run_at", ""),
+        "last_runs": [_task_run_to_dict(run) for run in crud.list_task_runs(db, limit=5)],
+    }
+
+
+@app.put("/admin/api/scheduler")
+def admin_api_scheduler_put(payload: schemas.SchedulerConfig, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    crud.upsert_setting(db, "news_crawler_enabled", "true" if payload.news_crawler_enabled else "false")
+    crud.upsert_setting(db, "news_crawler_cron", payload.cron)
+    crud.upsert_setting(db, "news_crawler_interval_minutes", str(payload.interval_minutes))
+    crud.upsert_setting(db, "news_crawler_limit", str(payload.limit))
+    crud.upsert_setting(db, "news_source_rss", "true" if payload.sources.get("rss") else "false")
+    crud.upsert_setting(db, "news_source_mcp", "true" if payload.sources.get("mcp") else "false")
+    crud.upsert_setting(db, "news_source_feeds", "true" if payload.sources.get("feeds") else "false")
+    scheduler_info = configure_news_scheduler(db)
+    return {"status": "ok", "next_run_at": scheduler_info.get("next_run_at", "")}
+
+
+@app.get("/admin/api/mcp/remotes")
+def admin_api_mcp_remotes(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    return [
+        {
+            "id": remote.id,
+            "name": remote.name,
+            "base_url": remote.base_url,
+            "auth_type": remote.auth_type,
+            "auth_value": remote.auth_value,
+            "timeout_sec": remote.timeout_sec,
+            "enabled": remote.enabled,
+            "priority": remote.priority,
+        }
+        for remote in crud.list_mcp_remotes(db)
+    ]
+
+
+@app.post("/admin/api/mcp/remotes")
+def admin_api_mcp_remote_create(
+    payload: schemas.MCPRemoteConfigPayload, request: Request, db: Session = Depends(get_db)
+):
+    require_admin_json(request)
+    remote = crud.create_mcp_remote(
+        db,
+        name=payload.name,
+        base_url=payload.base_url,
+        auth_type=payload.auth_type,
+        auth_value=payload.auth_value,
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+    )
+    return {"id": remote.id}
+
+
+@app.put("/admin/api/mcp/remotes/{remote_id}")
+def admin_api_mcp_remote_update(
+    remote_id: int,
+    payload: schemas.MCPRemoteConfigPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    remote = crud.get_mcp_remote(db, remote_id)
+    if not remote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Remote not found")
+    crud.update_mcp_remote(
+        db,
+        remote,
+        name=payload.name,
+        base_url=payload.base_url,
+        auth_type=payload.auth_type,
+        auth_value=payload.auth_value,
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/admin/api/mcp/remotes/{remote_id}")
+def admin_api_mcp_remote_delete(remote_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    remote = crud.get_mcp_remote(db, remote_id)
+    if not remote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Remote not found")
+    crud.delete_mcp_remote(db, remote)
+    return {"status": "ok"}
+
+
+@app.post("/admin/api/mcp/remotes/{remote_id}/test")
+def admin_api_mcp_remote_test(remote_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    remote = crud.get_mcp_remote(db, remote_id)
+    if not remote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Remote not found")
+    start = time.time()
+    error_message = ""
+    status_text = "success"
+    try:
+        headers = {}
+        if remote.auth_type in {"api_key", "token"} and remote.auth_value:
+            headers["Authorization"] = f"Bearer {remote.auth_value}"
+        response = httpx.post(remote.base_url, json={"query": "测试", "limit": 1}, headers=headers, timeout=remote.timeout_sec)
+        response.raise_for_status()
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message}
+
+
+@app.get("/admin/api/mcp/locals")
+def admin_api_mcp_locals(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    return [
+        {
+            "id": local.id,
+            "name": local.name,
+            "module_path": local.module_path,
+            "capabilities": json.loads(local.capabilities or "[]"),
+            "schema": json.loads(local.schema or "{}"),
+            "timeout_sec": local.timeout_sec,
+            "enabled": local.enabled,
+            "priority": local.priority,
+        }
+        for local in crud.list_mcp_locals(db)
+    ]
+
+
+@app.post("/admin/api/mcp/locals")
+def admin_api_mcp_local_create(
+    payload: schemas.MCPLocalPluginPayload, request: Request, db: Session = Depends(get_db)
+):
+    require_admin_json(request)
+    local = crud.create_mcp_local(
+        db,
+        name=payload.name,
+        module_path=payload.module_path,
+        capabilities=json.dumps(payload.capabilities, ensure_ascii=False),
+        schema=json.dumps(payload.schema, ensure_ascii=False),
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+    )
+    return {"id": local.id}
+
+
+@app.put("/admin/api/mcp/locals/{local_id}")
+def admin_api_mcp_local_update(
+    local_id: int,
+    payload: schemas.MCPLocalPluginPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    local = crud.get_mcp_local(db, local_id)
+    if not local:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local plugin not found")
+    crud.update_mcp_local(
+        db,
+        local,
+        name=payload.name,
+        module_path=payload.module_path,
+        capabilities=json.dumps(payload.capabilities, ensure_ascii=False),
+        schema=json.dumps(payload.schema, ensure_ascii=False),
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/admin/api/mcp/locals/{local_id}")
+def admin_api_mcp_local_delete(local_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    local = crud.get_mcp_local(db, local_id)
+    if not local:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local plugin not found")
+    crud.delete_mcp_local(db, local)
+    return {"status": "ok"}
+
+
+@app.post("/admin/api/mcp/locals/{local_id}/test")
+def admin_api_mcp_local_test(local_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    local = crud.get_mcp_local(db, local_id)
+    if not local:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local plugin not found")
+    start = time.time()
+    error_message = ""
+    status_text = "success"
+    try:
+        test_plugin(local.module_path)
+    except MCPPluginError as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message}
+
+
+@app.get("/admin/api/weather/providers")
+def admin_api_weather_providers(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    return [
+        {
+            "id": provider.id,
+            "name": provider.name,
+            "provider_type": provider.provider_type,
+            "base_url": provider.base_url,
+            "api_key": provider.api_key,
+            "timeout_sec": provider.timeout_sec,
+            "enabled": provider.enabled,
+            "priority": provider.priority,
+            "extra_config": json.loads(provider.extra_config or "{}"),
+        }
+        for provider in crud.list_weather_providers(db)
+    ]
+
+
+@app.post("/admin/api/weather/providers")
+def admin_api_weather_provider_create(
+    payload: schemas.WeatherProviderPayload, request: Request, db: Session = Depends(get_db)
+):
+    require_admin_json(request)
+    provider = crud.create_weather_provider(
+        db,
+        name=payload.name,
+        provider_type=payload.provider_type,
+        base_url=payload.base_url,
+        api_key=payload.api_key,
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+        extra_config=json.dumps(payload.extra_config, ensure_ascii=False),
+    )
+    return {"id": provider.id}
+
+
+@app.put("/admin/api/weather/providers/{provider_id}")
+def admin_api_weather_provider_update(
+    provider_id: int,
+    payload: schemas.WeatherProviderPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    provider = crud.get_weather_provider(db, provider_id)
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    crud.update_weather_provider(
+        db,
+        provider,
+        name=payload.name,
+        provider_type=payload.provider_type,
+        base_url=payload.base_url,
+        api_key=payload.api_key,
+        timeout_sec=payload.timeout_sec,
+        enabled=payload.enabled,
+        priority=payload.priority,
+        extra_config=json.dumps(payload.extra_config, ensure_ascii=False),
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/admin/api/weather/providers/{provider_id}")
+def admin_api_weather_provider_delete(provider_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    provider = crud.get_weather_provider(db, provider_id)
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    crud.delete_weather_provider(db, provider)
+    return {"status": "ok"}
+
+
+@app.post("/admin/api/weather/providers/{provider_id}/test")
+def admin_api_weather_provider_test(provider_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    provider = crud.get_weather_provider(db, provider_id)
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    start = time.time()
+    status_text = "success"
+    error_message = ""
+    try:
+        httpx.get(provider.base_url, timeout=provider.timeout_sec)
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    return {"status": status_text, "provider": provider.provider_type, "duration_ms": duration_ms, "error_message": error_message, "failover_count": 0}
+
+
+@app.get("/admin/api/users")
+def admin_api_users(request: Request, q: str | None = None, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    users = crud.list_users_filtered(db, q)
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "location": user.location,
+            "subscriptions": [tag for tag in user.subscriptions.split(",") if tag],
+            "is_active": user.is_active,
+        }
+        for user in users
+    ]
+
+
+@app.get("/admin/api/users/{user_id}")
+def admin_api_user_detail(user_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return {
+        "id": user.id,
+        "username": user.username,
+        "location": user.location,
+        "subscriptions": [tag for tag in user.subscriptions.split(",") if tag],
+        "is_active": user.is_active,
+    }
+
+
+@app.put("/admin/api/users/{user_id}")
+def admin_api_user_update(
+    user_id: int,
+    payload: schemas.UserAdminPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    updated_user = crud.update_user_profile(
+        db,
+        user,
+        username=payload.username,
+        location=payload.location,
+        subscriptions=payload.subscriptions,
+    )
+    crud.set_user_active(db, updated_user, payload.is_active)
+    return {"status": "ok"}
+
+
+@app.delete("/admin/api/users/{user_id}")
+def admin_api_user_delete(user_id: int, request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    crud.set_user_active(db, user, False)
+    return {"status": "ok"}
+
+
+@app.post("/admin/api/users/{user_id}/reset_password")
+def admin_api_user_reset_password(
+    user_id: int,
+    request: Request,
+    payload: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    require_admin_json(request)
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    new_password = payload.get("new_password", "")
+    if not new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="new_password required")
+    crud.reset_user_password(db, user, new_password)
+    return {"status": "ok"}

@@ -230,3 +230,35 @@
   - Phase 2 管理后台增强（手动触发、定时任务、用户 CRUD、MCP/天气配置）
 - 风险：
   - 后续接口变更需严格同步前端与文档
+
+## Fix Phase 2
+- 状态：已完成
+- 完成内容：
+  - 管理后台新增任务触发、定时任务配置、MCP 管理、天气 Provider 管理页面
+  - 新增 admin API：任务触发、scheduler 配置、MCP/天气/用户 CRUD
+  - MCP 远程配置支持多实例与测试，本地插件支持注册与测试
+  - 用户管理支持搜索、详情、启用/停用、重置密码、订阅标签编辑
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/schemas.py
+  - backend/app/mcp/registry.py
+  - backend/app/mcp/providers/demo.py
+  - backend/app/mcp/providers/__init__.py
+  - backend/app/mcp/__init__.py
+  - backend/app/news_crawler.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_users.html
+  - backend/app/templates/admin_news.html
+  - backend/app/templates/admin_tasks.html
+  - backend/app/templates/admin_scheduler.html
+  - backend/app/templates/admin_mcp.html
+  - backend/app/templates/admin_weather.html
+  - backend/app/templates/admin_user_detail.html
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 3 天气多 Provider failover + 国内 Provider 落地
+- 风险：
+  - Cron 表达式需管理员正确输入，否则调度创建可能失败

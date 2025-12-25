@@ -36,17 +36,31 @@ def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> No
     Expected MCP response JSON format:
     {"items": [{"title": "", "url": "", "summary": "", "source": "", "published_at": ""}]}
     """
-    enabled = _setting_value(db, "mcp_enabled", "false").lower() == "true"
-    base_url = _setting_value(db, "mcp_base_url", "")
-    api_key = _setting_value(db, "mcp_api_key", "")
+    remotes = [
+        remote
+        for remote in crud.list_mcp_remotes(db)
+        if remote.enabled and remote.base_url
+    ]
     keywords = _setting_value(db, "mcp_keywords", "资讯,科技")
-    if not enabled or not base_url:
-        logger.info("MCP search disabled or base_url missing")
-        return
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    if remotes:
+        remote = remotes[0]
+        headers = {}
+        if remote.auth_type in {"api_key", "token"} and remote.auth_value:
+            headers["Authorization"] = f"Bearer {remote.auth_value}"
+        base_url = remote.base_url
+        timeout = remote.timeout_sec
+    else:
+        enabled = _setting_value(db, "mcp_enabled", "false").lower() == "true"
+        base_url = _setting_value(db, "mcp_base_url", "")
+        api_key = _setting_value(db, "mcp_api_key", "")
+        timeout = 10.0
+        if not enabled or not base_url:
+            logger.info("MCP search disabled or base_url missing")
+            return
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     payload = {"query": keywords, "limit": 10}
     try:
-        response = httpx.post(base_url, json=payload, headers=headers, timeout=10.0)
+        response = httpx.post(base_url, json=payload, headers=headers, timeout=timeout)
         response.raise_for_status()
     except httpx.HTTPError as exc:
         logger.exception("MCP search request failed: %s", exc)

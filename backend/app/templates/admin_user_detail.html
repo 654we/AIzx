@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户详情</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 720px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+    label { display: block; margin-top: 12px; font-size: 14px; }
+    input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; }
+    button { margin-top: 16px; padding: 8px 12px; border: none; border-radius: 6px; background: #1c1d1f; color: #fff; }
+    .danger { background: #b91c1c; }
+    .message { margin-top: 12px; color: #047857; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/news">资讯管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>用户详情：{{ user.username }}</h2>
+    <form method="post">
+      <label>账号</label>
+      <input type="text" name="username" value="{{ user.username }}" />
+      <label>位置</label>
+      <input type="text" name="location" value="{{ user.location }}" />
+      <label>订阅标签（逗号分隔）</label>
+      <input type="text" name="subscriptions" value="{{ subscriptions }}" />
+      <label>是否启用（true/false）</label>
+      <input type="text" name="is_active" value="{{ 'true' if user.is_active else 'false' }}" />
+      <label>重置密码（留空不改）</label>
+      <input type="text" name="reset_password" value="" />
+      <input type="hidden" name="action" value="update" />
+      <button type="submit">保存</button>
+    </form>
+    <form method="post" style="margin-top: 16px;">
+      <input type="hidden" name="username" value="{{ user.username }}" />
+      <input type="hidden" name="location" value="{{ user.location }}" />
+      <input type="hidden" name="subscriptions" value="{{ subscriptions }}" />
+      <input type="hidden" name="is_active" value="false" />
+      <input type="hidden" name="action" value="deactivate" />
+      <button type="submit" class="danger">停用用户</button>
+    </form>
+    {% if message %}
+    <div class="message">{{ message }}</div>
+    {% endif %}
+  </div>
+</body>
+</html>

@@ -11,6 +11,7 @@ class User(Base):
     username = Column(String(64), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     is_admin = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     location = Column(String(128), default="")
     subscriptions = Column(String(512), default="")
     wechat_openid = Column(String(128), unique=True, nullable=True, index=True)
@@ -44,3 +45,56 @@ class Setting(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(128), unique=True, nullable=False)
     value = Column(Text, nullable=False)
+
+
+class TaskRun(Base):
+    __tablename__ = "task_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_type = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False)
+    duration_ms = Column(Integer, default=0)
+    error_message = Column(String(512), default="")
+    log_excerpt = Column(Text, default="")
+    payload_json = Column(Text, default="")
+    created_at = Column(String(64), nullable=False)
+
+
+class WeatherProvider(Base):
+    __tablename__ = "weather_providers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    provider_type = Column(String(64), nullable=False)
+    base_url = Column(String(256), nullable=False)
+    api_key = Column(String(256), default="")
+    timeout_sec = Column(Integer, default=5)
+    enabled = Column(Boolean, default=True)
+    priority = Column(Integer, default=1)
+    extra_config = Column(Text, default="{}")
+
+
+class MCPRemoteConfig(Base):
+    __tablename__ = "mcp_remote_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    base_url = Column(String(256), nullable=False)
+    auth_type = Column(String(32), default="none")
+    auth_value = Column(String(256), default="")
+    timeout_sec = Column(Integer, default=10)
+    enabled = Column(Boolean, default=True)
+    priority = Column(Integer, default=1)
+
+
+class MCPLocalPlugin(Base):
+    __tablename__ = "mcp_local_plugins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    module_path = Column(String(256), nullable=False)
+    capabilities = Column(Text, default="[]")
+    schema = Column(Text, default="{}")
+    timeout_sec = Column(Integer, default=10)
+    enabled = Column(Boolean, default=True)
+    priority = Column(Integer, default=1)

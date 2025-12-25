@@ -17,18 +17,28 @@
   <div class="container">
     <div class="nav">
       <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
       <a href="/admin/users">用户管理</a>
       <a href="/admin/news">资讯管理</a>
       <a href="/admin/logout">退出</a>
     </div>
     <h2>用户管理</h2>
+    <form method="get" style="margin-bottom: 16px;">
+      <input type="text" name="q" value="{{ query }}" placeholder="搜索账号" />
+      <button type="submit">搜索</button>
+    </form>
     <table>
       <thead>
         <tr>
           <th>ID</th>
           <th>账号</th>
           <th>是否管理员</th>
+          <th>是否启用</th>
           <th>位置</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -37,7 +47,9 @@
           <td>{{ user.id }}</td>
           <td>{{ user.username }}</td>
           <td>{{ '是' if user.is_admin else '否' }}</td>
+          <td>{{ '启用' if user.is_active else '停用' }}</td>
           <td>{{ user.location }}</td>
+          <td><a href="/admin/users/{{ user.id }}">详情</a></td>
         </tr>
         {% endfor %}
       </tbody>

@@ -102,3 +102,60 @@ class ScheduleResponse(BaseModel):
     meta: ScheduleMeta
     week: list[ScheduleDay]
     tips: list[str]
+
+
+class TaskRunResponse(BaseModel):
+    id: int
+    task_type: str
+    status: str
+    duration_ms: int
+    error_message: str = ""
+    log_excerpt: str = ""
+    payload_json: str = ""
+    created_at: str
+
+
+class SchedulerConfig(BaseModel):
+    news_crawler_enabled: bool
+    cron: str = ""
+    interval_minutes: int = 30
+    limit: int = 20
+    sources: dict[str, bool]
+
+
+class MCPRemoteConfigPayload(BaseModel):
+    name: str
+    base_url: str
+    auth_type: str = "none"
+    auth_value: str = ""
+    timeout_sec: int = 10
+    enabled: bool = True
+    priority: int = 1
+
+
+class MCPLocalPluginPayload(BaseModel):
+    name: str
+    module_path: str
+    capabilities: list[str]
+    schema: dict
+    timeout_sec: int = 10
+    enabled: bool = True
+    priority: int = 1
+
+
+class WeatherProviderPayload(BaseModel):
+    name: str
+    provider_type: str
+    base_url: str
+    api_key: str = ""
+    timeout_sec: int = 5
+    enabled: bool = True
+    priority: int = 1
+    extra_config: dict = {}
+
+
+class UserAdminPayload(BaseModel):
+    username: str
+    location: str = ""
+    subscriptions: list[str] = []
+    is_active: bool = True

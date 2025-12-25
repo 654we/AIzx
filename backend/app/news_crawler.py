@@ -26,7 +26,7 @@ def parse_feed(url: str) -> Iterable[dict]:
         }
 
 
-def crawl_feeds(db: Session, feed_urls: list[str], summarize) -> int:
+def crawl_feeds(db: Session, feed_urls: list[str], summarize, limit: int | None = None) -> int:
     created = 0
     for url in feed_urls:
         try:
@@ -48,6 +48,8 @@ def crawl_feeds(db: Session, feed_urls: list[str], summarize) -> int:
                     tags=["订阅"],
                 )
                 created += 1
+                if limit is not None and created >= limit:
+                    return created
         except Exception as exc:
             logger.exception("Feed crawl failed: %s", exc)
     return created

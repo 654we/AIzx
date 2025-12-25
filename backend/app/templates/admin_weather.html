@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天气配置</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 980px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; }
+    input { width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #e5e7eb; }
+    button { padding: 6px 10px; border: none; border-radius: 6px; background: #1c1d1f; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/news">资讯管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>天气 Provider 管理</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>类型</th>
+          <th>Base URL</th>
+          <th>API Key</th>
+          <th>超时</th>
+          <th>启用</th>
+          <th>优先级</th>
+          <th>配置(JSON)</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for provider in providers %}
+        <tr data-id="{{ provider.id }}" class="provider-row">
+          <td><input value="{{ provider.name }}" class="name" /></td>
+          <td><input value="{{ provider.provider_type }}" class="provider_type" /></td>
+          <td><input value="{{ provider.base_url }}" class="base_url" /></td>
+          <td><input value="{{ provider.api_key }}" class="api_key" /></td>
+          <td><input value="{{ provider.timeout_sec }}" class="timeout_sec" /></td>
+          <td><input value="{{ 'true' if provider.enabled else 'false' }}" class="enabled" /></td>
+          <td><input value="{{ provider.priority }}" class="priority" /></td>
+          <td><input value="{{ provider.extra_config }}" class="extra_config" /></td>
+          <td>
+            <button onclick="updateProvider({{ provider.id }})">保存</button>
+            <button onclick="testProvider({{ provider.id }})">测试</button>
+            <button onclick="deleteProvider({{ provider.id }})">删除</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <h4>新增 Provider</h4>
+    <div>
+      <input id="providerName" placeholder="名称" />
+      <input id="providerType" placeholder="open-meteo/gaode/qweather" />
+      <input id="providerUrl" placeholder="Base URL" />
+      <input id="providerKey" placeholder="API Key" />
+      <input id="providerTimeout" placeholder="timeout_sec" value="5" />
+      <input id="providerEnabled" placeholder="enabled" value="true" />
+      <input id="providerPriority" placeholder="priority" value="1" />
+      <input id="providerExtra" placeholder='{"city": "上海"}' />
+      <button onclick="createProvider()">新增</button>
+    </div>
+  </div>
+
+  <script>
+    async function createProvider() {
+      await fetch('/admin/api/weather/providers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: providerName.value,
+          provider_type: providerType.value,
+          base_url: providerUrl.value,
+          api_key: providerKey.value,
+          timeout_sec: Number(providerTimeout.value || 5),
+          enabled: providerEnabled.value === 'true',
+          priority: Number(providerPriority.value || 1),
+          extra_config: JSON.parse(providerExtra.value || '{}')
+        })
+      });
+      location.reload();
+    }
+
+    async function updateProvider(id) {
+      const row = document.querySelector(`tr.provider-row[data-id='${id}']`);
+      await fetch(`/admin/api/weather/providers/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: row.querySelector('.name').value,
+          provider_type: row.querySelector('.provider_type').value,
+          base_url: row.querySelector('.base_url').value,
+          api_key: row.querySelector('.api_key').value,
+          timeout_sec: Number(row.querySelector('.timeout_sec').value || 5),
+          enabled: row.querySelector('.enabled').value === 'true',
+          priority: Number(row.querySelector('.priority').value || 1),
+          extra_config: JSON.parse(row.querySelector('.extra_config').value || '{}')
+        })
+      });
+      location.reload();
+    }
+
+    async function deleteProvider(id) {
+      await fetch(`/admin/api/weather/providers/${id}`, {method: 'DELETE'});
+      location.reload();
+    }
+
+    async function testProvider(id) {
+      const response = await fetch(`/admin/api/weather/providers/${id}/test`, {method: 'POST'});
+      alert(JSON.stringify(await response.json()));
+    }
+  </script>
+</body>
+</html>
