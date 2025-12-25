@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
-from app.ai import DeepSeekProvider, GLMProvider, OpenAICompatProvider, ProviderConfig
+from app.ai_router import build_provider, get_route, provider_ready
 from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
@@ -101,7 +101,25 @@ def travel_advice_for(condition: str, temp_c: float, aqi: int) -> list[str]:
     return advice[:2]
 
 
-def fetch_weather(location: str) -> schemas.WeatherResponse:
+def travel_advice_from_ai(db: Session, condition: str, temp_c: float, aqi: int) -> list[str]:
+    route = get_route(db, "ai_route_weather", "openai")
+    if not provider_ready(db, route):
+        return travel_advice_for(condition, temp_c, aqi)
+    provider = build_provider(route, db)
+    prompt = (
+        "请根据以下天气信息给出两条简短出行建议，每条不超过20字："
+        f"天气={condition}，温度={temp_c}C，AQI={aqi}。"
+        "只返回用中文短句，每条建议一行。"
+    )
+    try:
+        text = provider.generate(prompt)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return lines[:2] if lines else travel_advice_for(condition, temp_c, aqi)
+    except Exception:
+        return travel_advice_for(condition, temp_c, aqi)
+
+
+def fetch_weather(db: Session, location: str) -> schemas.WeatherResponse:
     if not location:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Location required")
     try:
@@ -161,7 +179,7 @@ def fetch_weather(location: str) -> schemas.WeatherResponse:
             aqi_desc=aqi_desc,
             updated_at=current.get("time", ""),
         ),
-        travel_advice=travel_advice_for(condition, temp_c, aqi),
+        travel_advice=travel_advice_from_ai(db, condition, temp_c, aqi),
     )
 
 
@@ -196,6 +214,28 @@ def build_schedule_plan(source_filename: str) -> schemas.ScheduleResponse:
         week=week,
         tips=["上传更多日程内容以生成更准确的计划。"],
     )
+
+
+def schedule_from_ai(db: Session, source_filename: str, content: str) -> schemas.ScheduleResponse:
+    route = get_route(db, "ai_route_schedule", "glm")
+    if not provider_ready(db, route):
+        return build_schedule_plan(source_filename)
+    provider = build_provider(route, db)
+    prompt = (
+        "请根据以下日程内容生成固定格式JSON，不要包含多余文字。"
+        "JSON格式：{\"meta\": {\"source_filename\": \"\", \"generated_at\": \"ISO8601\", \"timezone\": \"Asia/Shanghai\", \"version\": \"1.0\"},"
+        "\"week\": [{\"date\": \"YYYY-MM-DD\", \"day_of_week\": 1, \"blocks\": [{\"start\": \"HH:MM\", \"end\": \"HH:MM\","
+        "\"title\": \"\", \"location\": \"\", \"type\": \"study|work|life|health|other\", \"notes\": \"\"}]}],"
+        "\"tips\": [\"\", \"\"]}"
+        "确保 blocks 时间不重叠，按 start 升序。内容如下：\n"
+        f"{content}"
+    )
+    try:
+        raw = provider.generate(prompt)
+        data = json.loads(raw)
+        return schemas.ScheduleResponse(**data)
+    except Exception:
+        return build_schedule_plan(source_filename)
 
 
 def get_current_user(
@@ -252,8 +292,8 @@ def wechat_login(payload: schemas.WechatLogin, db: Session = Depends(get_db)):
 
 
 @app.get("/api/weather", response_model=schemas.WeatherResponse)
-def weather(location: str):
-    return fetch_weather(location)
+def weather(location: str, db: Session = Depends(get_db)):
+    return fetch_weather(db, location)
 
 
 @app.get("/api/news", response_model=schemas.NewsResponse)
@@ -304,7 +344,8 @@ def upload_schedule(
     stored_path = os.path.join("uploads", f"{current_user.id}_{file.filename}")
     with open(stored_path, "wb") as f:
         f.write(content)
-    plan = build_schedule_plan(file.filename)
+    content_text = content.decode("utf-8", errors="ignore")
+    plan = schedule_from_ai(db, file.filename, content_text)
     payload = plan.model_dump_json()
     crud.create_schedule_plan(
         db,
@@ -359,7 +400,7 @@ def update_subscriptions(
     return {"status": "ok"}
 
 
-@app.post("/admin/login")
+@app.get("/admin/login")
 def admin_login(request: Request):
     return templates.TemplateResponse("admin_login.html", {"request": request, "error": ""})
 

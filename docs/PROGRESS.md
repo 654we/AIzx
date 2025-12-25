@@ -132,3 +132,18 @@
 - 下一步：
   - 补充 AI 路由策略与配置项详情
   - 对接 AI 生成逻辑
+
+## Phase 7
+- 状态：已完成
+- 完成内容：
+  - AI Provider 抽象与路由策略接入天气/日程
+  - AI 配置项在管理后台可编辑
+- 文件清单：
+  - backend/app/ai.py
+  - backend/app/ai_router.py
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - docs/ADMIN_GUIDE.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 资讯聚合与 AI 摘要整合

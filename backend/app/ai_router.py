@@ -39,3 +39,13 @@ def build_provider(name: str, db: Session):
 
 def get_route(db: Session, key: str, default: str) -> str:
     return setting_value(db, key, default)
+
+
+def provider_ready(db: Session, name: str) -> bool:
+    key_map = {
+        "deepseek": "ai_deepseek_api_key",
+        "glm": "ai_glm_api_key",
+        "openai": "ai_openai_api_key",
+    }
+    key_name = key_map.get(name, "ai_openai_api_key")
+    return bool(setting_value(db, key_name, ""))
