@@ -35,8 +35,16 @@
       <input type="text" name="weather_api_url" value="{{ settings.weather_api_url }}" />
       <label>资讯抓取开关（true/false）</label>
       <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />
+      <label>资讯来源模式（rss/mcp）</label>
+      <input type="text" name="news_source_mode" value="{{ settings.news_source_mode }}" />
       <label>订阅链接（逗号分隔）</label>
       <textarea name="news_feed_urls" rows="3">{{ settings.news_feed_urls }}</textarea>
+      <label>MCP 开关（true/false）</label>
+      <input type="text" name="mcp_enabled" value="{{ settings.mcp_enabled }}" />
+      <label>MCP Base URL</label>
+      <input type="text" name="mcp_base_url" value="{{ settings.mcp_base_url }}" />
+      <label>MCP API Key</label>
+      <input type="password" name="mcp_api_key" value="{{ settings.mcp_api_key }}" />
       <h3>AI 接口配置</h3>
       <label>DeepSeek Base URL</label>
       <input type="text" name="ai_deepseek_base_url" value="{{ settings.ai_deepseek_base_url }}" />

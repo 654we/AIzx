@@ -177,3 +177,17 @@
   - docs/PROGRESS.md
 - 下一步：
   - 完善 MCP 搜索与爬虫模式
+
+## Phase 10
+- 状态：已完成
+- 完成内容：
+  - MCP 搜索配置与来源模式配置
+  - MCP 搜索占位实现与后台可配置
+- 文件清单：
+  - backend/app/mcp_search.py
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - docs/ADMIN_GUIDE.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 对接真实 MCP 搜索与数据解析

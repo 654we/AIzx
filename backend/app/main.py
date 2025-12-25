@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.ai_router import build_provider, get_route, provider_ready
 from app.news_crawler import crawl_feeds
+from app.mcp_search import search_news_via_mcp
 from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
@@ -268,8 +269,13 @@ def news_summary_from_ai(db: Session, title: str, content: str) -> str:
 def run_news_crawler() -> None:
     db = next(get_db())
     try:
+        mode_setting = crud.get_setting(db, "news_source_mode")
+        mode = mode_setting.value if mode_setting else "rss"
         enabled = crud.get_setting(db, "news_crawler_enabled")
         if not enabled or enabled.value.lower() != "true":
+            return
+        if mode == "mcp":
+            search_news_via_mcp(db, news_summary_from_ai)
             return
         feed_setting = crud.get_setting(db, "news_feed_urls")
         if not feed_setting or not feed_setting.value:
@@ -494,6 +500,10 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "weather_api_url": setting_value("weather_api_url", settings.weather_api_url),
         "news_crawler_enabled": setting_value("news_crawler_enabled", "false"),
         "news_feed_urls": setting_value("news_feed_urls", ""),
+        "news_source_mode": setting_value("news_source_mode", "rss"),
+        "mcp_enabled": setting_value("mcp_enabled", "false"),
+        "mcp_base_url": setting_value("mcp_base_url", ""),
+        "mcp_api_key": setting_value("mcp_api_key", ""),
         "ai_deepseek_api_key": setting_value("ai_deepseek_api_key", ""),
         "ai_deepseek_base_url": setting_value("ai_deepseek_base_url", "https://api.deepseek.com"),
         "ai_deepseek_model": setting_value("ai_deepseek_model", "deepseek-chat"),
@@ -522,6 +532,10 @@ def admin_settings_post(
     weather_api_url: str = Form(""),
     news_crawler_enabled: str = Form("false"),
     news_feed_urls: str = Form(""),
+    news_source_mode: str = Form("rss"),
+    mcp_enabled: str = Form("false"),
+    mcp_base_url: str = Form(""),
+    mcp_api_key: str = Form(""),
     ai_deepseek_api_key: str = Form(""),
     ai_deepseek_base_url: str = Form(""),
     ai_deepseek_model: str = Form(""),
@@ -545,6 +559,10 @@ def admin_settings_post(
     crud.upsert_setting(db, "weather_api_url", weather_api_url)
     crud.upsert_setting(db, "news_crawler_enabled", news_crawler_enabled)
     crud.upsert_setting(db, "news_feed_urls", news_feed_urls)
+    crud.upsert_setting(db, "news_source_mode", news_source_mode)
+    crud.upsert_setting(db, "mcp_enabled", mcp_enabled)
+    crud.upsert_setting(db, "mcp_base_url", mcp_base_url)
+    crud.upsert_setting(db, "mcp_api_key", mcp_api_key)
     crud.upsert_setting(db, "ai_deepseek_api_key", ai_deepseek_api_key)
     crud.upsert_setting(db, "ai_deepseek_base_url", ai_deepseek_base_url)
     crud.upsert_setting(db, "ai_deepseek_model", ai_deepseek_model)
