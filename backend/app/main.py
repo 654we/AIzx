@@ -4,7 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
+from app import crud, models, schemas
 from app.auth import create_access_token
 from app.config import settings
 from app.database import init_db
@@ -22,6 +22,17 @@ def startup_event() -> None:
         admin = crud.get_user_by_username(db, "admin")
         if not admin:
             crud.create_user(db, "admin", "admin", is_admin=True)
+        existing_news = db.query(models.NewsItem).count()
+        if existing_news == 0:
+            crud.create_news_item(
+                db,
+                title="欢迎使用资讯频道",
+                summary="这里展示最新资讯内容，后续将接入订阅与抓取。",
+                source="系统",
+                url="https://example.com/welcome",
+                published_at="2024-01-01T09:00:00+08:00",
+                tags=["推荐"],
+            )
     finally:
         db.close()
 
@@ -198,6 +209,37 @@ def wechat_login(payload: schemas.WechatLogin, db: Session = Depends(get_db)):
 @app.get("/api/weather", response_model=schemas.WeatherResponse)
 def weather(location: str):
     return fetch_weather(location)
+
+
+@app.get("/api/news", response_model=schemas.NewsResponse)
+def news(
+    page: int = 1,
+    page_size: int = 10,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 50)
+    tags = [tag for tag in current_user.subscriptions.split(",") if tag]
+    items, total = crud.list_news(db, tags, page, page_size)
+    mapped = [
+        schemas.NewsItem(
+            id=item.id,
+            title=item.title,
+            summary=item.summary,
+            source=item.source,
+            url=item.url,
+            published_at=item.published_at,
+            tags=[tag for tag in item.tags.split(",") if tag],
+        )
+        for item in items
+    ]
+    return schemas.NewsResponse(
+        items=mapped,
+        page=page,
+        page_size=page_size,
+        has_more=page * page_size < total,
+    )
 
 
 @app.get("/api/user/profile", response_model=schemas.UserProfile)

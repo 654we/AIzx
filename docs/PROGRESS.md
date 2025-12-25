@@ -74,3 +74,22 @@
   - Phase 4 资讯聚合与订阅标签管理
 - 遗留问题：
   - 天气接口无 AQI 数据源，当前使用默认 AQI 占位值
+
+## Phase 4
+- 状态：已完成
+- 完成内容：
+  - 资讯分页接口与订阅标签过滤
+  - 前端资讯列表拉取与详情跳转
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/webview/index.vue
+  - AIx2/pages.json
+  - docs/API.md
+- 下一步：
+  - Phase 5 日程上传与课表渲染
+- 遗留问题：
+  - 资讯聚合抓取与定时任务待实现

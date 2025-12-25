@@ -4,7 +4,7 @@
       <text class="title">资讯</text>
       <text class="subtitle">关注你关心的内容</text>
     </view>
-    <view class="card" v-for="item in items" :key="item.id">
+    <view class="card" v-for="item in items" :key="item.id" @click="openLink(item.url)">
       <text class="card-title">{{ item.title }}</text>
       <text class="card-summary">{{ item.summary }}</text>
       <view class="card-meta">
@@ -15,22 +15,52 @@
     <view class="empty" v-if="items.length === 0">
       <text>暂无资讯，请稍后再试</text>
     </view>
+    <button v-if="hasMore" class="load-more" @click="loadMore">加载更多</button>
   </view>
 </template>
 
 <script>
+import { request } from '../../utils/request'
+
 export default {
   data() {
     return {
-      items: [
-        {
-          id: '1',
-          title: '今日热点标题示例',
-          summary: '这里是摘要内容，展示 2~3 行以内的简短说明。',
-          source: '示例来源',
-          published_at: '09:00'
-        }
-      ]
+      items: [],
+      page: 1,
+      hasMore: false,
+      loading: false
+    }
+  },
+  onShow() {
+    this.page = 1
+    this.items = []
+    this.fetchNews()
+  },
+  methods: {
+    fetchNews() {
+      if (this.loading) return
+      this.loading = true
+      request({ url: `/api/news?page=${this.page}&page_size=10` })
+        .then((res) => {
+          const nextItems = res.items || []
+          this.items = this.items.concat(nextItems)
+          this.hasMore = res.has_more
+        })
+        .catch(() => {
+          uni.showToast({ title: '资讯获取失败', icon: 'none' })
+        })
+        .finally(() => {
+          this.loading = false
+        })
+    },
+    loadMore() {
+      if (!this.hasMore) return
+      this.page += 1
+      this.fetchNews()
+    },
+    openLink(url) {
+      if (!url) return
+      uni.navigateTo({ url: `/pages/webview/index?url=${encodeURIComponent(url)}` })
     }
   }
 }
@@ -85,5 +115,11 @@ export default {
   text-align: center;
   color: #8b9098;
   margin-top: 80rpx;
+}
+.load-more {
+  margin-top: 16rpx;
+  background: #fff;
+  border: none;
+  color: #1c1d1f;
 }
 </style>

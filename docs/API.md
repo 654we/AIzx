@@ -70,6 +70,7 @@ Authorization: Bearer <token>
 
 ## 资讯
 ### GET /api/news?page=&page_size=
+- 说明：需登录后调用；默认按用户订阅标签过滤
 - Response:
 ```json
 {

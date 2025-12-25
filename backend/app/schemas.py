@@ -57,3 +57,20 @@ class WeatherResponse(BaseModel):
     location: WeatherLocation
     weather: WeatherInfo
     travel_advice: list[str]
+
+
+class NewsItem(BaseModel):
+    id: int
+    title: str
+    summary: str
+    source: str
+    url: str
+    published_at: str
+    tags: list[str]
+
+
+class NewsResponse(BaseModel):
+    items: list[NewsItem]
+    page: int
+    page_size: int
+    has_more: bool

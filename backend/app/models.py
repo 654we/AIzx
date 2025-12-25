@@ -13,3 +13,15 @@ class User(Base):
     location = Column(String(128), default="")
     subscriptions = Column(String(512), default="")
     wechat_openid = Column(String(128), unique=True, nullable=True, index=True)
+
+
+class NewsItem(Base):
+    __tablename__ = "news_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(256), nullable=False)
+    summary = Column(String(512), nullable=False)
+    source = Column(String(128), nullable=False)
+    url = Column(String(512), unique=True, nullable=False)
+    published_at = Column(String(64), nullable=False)
+    tags = Column(String(256), default="")
