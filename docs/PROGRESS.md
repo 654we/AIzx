@@ -93,3 +93,20 @@
   - Phase 5 日程上传与课表渲染
 - 遗留问题：
   - 资讯聚合抓取与定时任务待实现
+
+## Phase 5
+- 状态：已完成
+- 完成内容：
+  - 日程文件上传与固定格式日程返回
+  - 前端日程页上传与课表渲染
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/schedule/index.vue
+  - docs/API.md
+- 下一步：
+  - Phase 6 管理后台完善
+- 遗留问题：
+  - 日程解析与 AI 生成逻辑待补充

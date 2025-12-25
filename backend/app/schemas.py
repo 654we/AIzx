@@ -74,3 +74,31 @@ class NewsResponse(BaseModel):
     page: int
     page_size: int
     has_more: bool
+
+
+class ScheduleMeta(BaseModel):
+    source_filename: str
+    generated_at: str
+    timezone: str
+    version: str = "1.0"
+
+
+class ScheduleBlock(BaseModel):
+    start: str
+    end: str
+    title: str
+    location: str
+    type: str
+    notes: str
+
+
+class ScheduleDay(BaseModel):
+    date: str
+    day_of_week: int
+    blocks: list[ScheduleBlock]
+
+
+class ScheduleResponse(BaseModel):
+    meta: ScheduleMeta
+    week: list[ScheduleDay]
+    tips: list[str]

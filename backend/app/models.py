@@ -1,4 +1,5 @@
 from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Text
 
 from app.database import Base
 
@@ -25,3 +26,13 @@ class NewsItem(Base):
     url = Column(String(512), unique=True, nullable=False)
     published_at = Column(String(64), nullable=False)
     tags = Column(String(256), default="")
+
+
+class SchedulePlan(Base):
+    __tablename__ = "schedule_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    source_filename = Column(String(256), nullable=False)
+    payload = Column(Text, nullable=False)
+    created_at = Column(String(64), nullable=False)

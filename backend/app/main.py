@@ -1,5 +1,10 @@
+import json
+import os
+from datetime import datetime, timedelta
+
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -153,6 +158,39 @@ def fetch_weather(location: str) -> schemas.WeatherResponse:
     )
 
 
+def build_schedule_plan(source_filename: str) -> schemas.ScheduleResponse:
+    today = datetime.now()
+    week = []
+    for offset in range(5):
+        day = today + timedelta(days=offset)
+        date_str = day.strftime("%Y-%m-%d")
+        week.append(
+            schemas.ScheduleDay(
+                date=date_str,
+                day_of_week=day.isoweekday(),
+                blocks=[
+                    schemas.ScheduleBlock(
+                        start="09:00",
+                        end="10:30",
+                        title="待办事项",
+                        location="待定",
+                        type="other",
+                        notes="示例日程，上传内容解析将在后续阶段完善。",
+                    )
+                ],
+            )
+        )
+    return schemas.ScheduleResponse(
+        meta=schemas.ScheduleMeta(
+            source_filename=source_filename,
+            generated_at=datetime.now().isoformat(),
+            timezone="Asia/Shanghai",
+        ),
+        week=week,
+        tips=["上传更多日程内容以生成更准确的计划。"],
+    )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -240,6 +278,43 @@ def news(
         page_size=page_size,
         has_more=page * page_size < total,
     )
+
+
+@app.post("/api/schedule/upload", response_model=schemas.ScheduleResponse)
+def upload_schedule(
+    file: UploadFile,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File required")
+    if not file.filename.lower().endswith((".txt", ".md", ".csv")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
+    content = file.file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large")
+    os.makedirs("uploads", exist_ok=True)
+    stored_path = os.path.join("uploads", f"{current_user.id}_{file.filename}")
+    with open(stored_path, "wb") as f:
+        f.write(content)
+    plan = build_schedule_plan(file.filename)
+    payload = plan.model_dump_json()
+    crud.create_schedule_plan(
+        db,
+        user_id=current_user.id,
+        source_filename=file.filename,
+        payload=payload,
+        created_at=datetime.now().isoformat(),
+    )
+    return plan
+
+
+@app.get("/api/schedule/latest", response_model=schemas.ScheduleResponse)
+def latest_schedule(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = crud.get_latest_schedule(db, current_user.id)
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No schedule found")
+    return schemas.ScheduleResponse(**json.loads(plan.payload))
 
 
 @app.get("/api/user/profile", response_model=schemas.UserProfile)

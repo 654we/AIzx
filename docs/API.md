@@ -95,10 +95,15 @@ Authorization: Bearer <token>
 
 ## 日程
 ### POST /api/schedule/upload
-- 说明：上传日程文件（Phase 5 完善）
+- 说明：上传日程文件（txt/md/csv，<=2MB）
+- Header: Authorization Bearer token
+- FormData:
+  - file: 文件
+- Response: 固定格式日程 JSON
 
 ### GET /api/schedule/latest
 - 说明：获取最新日程
+- Header: Authorization Bearer token
 
 ## 管理后台
 ### /admin/login

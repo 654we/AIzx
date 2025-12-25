@@ -78,6 +78,34 @@ def list_news(db: Session, tags: list[str], page: int, page_size: int) -> tuple[
     return items, total
 
 
+def create_schedule_plan(
+    db: Session,
+    user_id: int,
+    source_filename: str,
+    payload: str,
+    created_at: str,
+) -> models.SchedulePlan:
+    plan = models.SchedulePlan(
+        user_id=user_id,
+        source_filename=source_filename,
+        payload=payload,
+        created_at=created_at,
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+def get_latest_schedule(db: Session, user_id: int) -> models.SchedulePlan | None:
+    return (
+        db.query(models.SchedulePlan)
+        .filter(models.SchedulePlan.user_id == user_id)
+        .order_by(models.SchedulePlan.created_at.desc())
+        .first()
+    )
+
+
 def authenticate_user(db: Session, username: str, password: str) -> models.User | None:
     user = get_user_by_username(db, username)
     if not user:
