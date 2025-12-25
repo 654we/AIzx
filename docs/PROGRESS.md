@@ -55,3 +55,22 @@
   - Phase 3 天气接口与位置设置
 - 遗留问题：
   - 微信登录需配置真实 AppID/Secret
+
+## Phase 3
+- 状态：已完成
+- 完成内容：
+  - 天气接口对接与出行建议生成（Open-Meteo）
+  - 位置设置页面与天气页联动
+- 文件清单：
+  - backend/app/config.py
+  - backend/app/main.py
+  - backend/app/schemas.py
+  - AIx2/pages/location/index.vue
+  - AIx2/pages/weather/index.vue
+  - AIx2/pages/mine/index.vue
+  - AIx2/pages.json
+  - docs/API.md
+- 下一步：
+  - Phase 4 资讯聚合与订阅标签管理
+- 遗留问题：
+  - 天气接口无 AQI 数据源，当前使用默认 AQI 占位值

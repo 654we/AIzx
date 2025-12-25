@@ -17,7 +17,7 @@
         <text>订阅标签</text>
         <text class="arrow">›</text>
       </view>
-      <view class="row">
+      <view class="row" @click="goLocation">
         <text>位置设置</text>
         <text class="arrow">›</text>
       </view>
@@ -70,6 +70,9 @@ export default {
       this.username = '未登录'
       this.description = '登录后管理你的偏好'
       uni.showToast({ title: '已退出登录', icon: 'none' })
+    },
+    goLocation() {
+      uni.navigateTo({ url: '/pages/location/index' })
     }
   }
 }

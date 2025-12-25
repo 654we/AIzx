@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     wechat_appid: str = ""
     wechat_secret: str = ""
     wechat_base_url: str = "https://api.weixin.qq.com/sns/jscode2session"
+    weather_geo_url: str = "https://geocoding-api.open-meteo.com/v1/search"
+    weather_api_url: str = "https://api.open-meteo.com/v1/forecast"
 
     class Config:
         env_file = ".env"

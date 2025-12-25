@@ -90,6 +90,7 @@ Authorization: Bearer <token>
   "travel_advice": []
 }
 ```
+- 说明：location 为城市名称，例如 `上海`
 
 ## 日程
 ### POST /api/schedule/upload

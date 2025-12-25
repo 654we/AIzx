@@ -1,6 +1,6 @@
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import httpx
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -47,6 +47,99 @@ def fetch_wechat_openid(code: str) -> str:
     if not openid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="WeChat openid missing")
     return openid
+
+
+def aqi_description(aqi: int) -> str:
+    if aqi <= 50:
+        return "优"
+    if aqi <= 100:
+        return "良"
+    if aqi <= 150:
+        return "轻度"
+    if aqi <= 200:
+        return "中度"
+    if aqi <= 300:
+        return "重度"
+    return "严重"
+
+
+def travel_advice_for(condition: str, temp_c: float, aqi: int) -> list[str]:
+    advice = []
+    if "雨" in condition:
+        advice.append("短时有降水，建议随身携带雨具。")
+    if temp_c >= 30:
+        advice.append("气温偏高，外出注意防晒补水。")
+    if temp_c <= 5:
+        advice.append("气温较低，外出注意保暖。")
+    if aqi > 100:
+        advice.append("空气质量一般，敏感人群减少户外活动。")
+    if not advice:
+        advice.append("天气舒适，适合常规出行安排。")
+    return advice[:2]
+
+
+def fetch_weather(location: str) -> schemas.WeatherResponse:
+    if not location:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Location required")
+    try:
+        geo_resp = httpx.get(
+            settings.weather_geo_url,
+            params={"name": location, "count": 1, "language": "zh", "format": "json"},
+            timeout=5.0,
+        )
+        geo_resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Geo request failed") from exc
+    geo_data = geo_resp.json()
+    results = geo_data.get("results") or []
+    if not results:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
+    info = results[0]
+    lat = info.get("latitude")
+    lon = info.get("longitude")
+    name = info.get("name")
+    try:
+        weather_resp = httpx.get(
+            settings.weather_api_url,
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+                "timezone": "Asia/Shanghai",
+            },
+            timeout=5.0,
+        )
+        weather_resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Weather request failed") from exc
+    weather_data = weather_resp.json()
+    current = weather_data.get("current") or {}
+    temp_c = float(current.get("temperature_2m", 0))
+    humidity = int(current.get("relative_humidity_2m", 0))
+    wind_speed = current.get("wind_speed_10m", 0)
+    condition = "晴"
+    weather_code = current.get("weather_code")
+    if weather_code in {51, 53, 55, 61, 63, 65, 80, 81, 82}:
+        condition = "雨"
+    elif weather_code in {71, 73, 75, 85, 86}:
+        condition = "雪"
+    elif weather_code in {2, 3}:
+        condition = "多云"
+    aqi = 60
+    aqi_desc = aqi_description(aqi)
+    return schemas.WeatherResponse(
+        location=schemas.WeatherLocation(name=name, lat=lat, lon=lon),
+        weather=schemas.WeatherInfo(
+            condition=condition,
+            temp_c=temp_c,
+            humidity=humidity,
+            wind=f"{wind_speed} km/h",
+            aqi=aqi,
+            aqi_desc=aqi_desc,
+            updated_at=current.get("time", ""),
+        ),
+        travel_advice=travel_advice_for(condition, temp_c, aqi),
+    )
 
 
 def get_current_user(
@@ -100,6 +193,11 @@ def wechat_login(payload: schemas.WechatLogin, db: Session = Depends(get_db)):
         user = crud.create_wechat_user(db, username, openid)
     token = create_access_token(user.username)
     return {"access_token": token, "token_type": "bearer"}
+
+
+@app.get("/api/weather", response_model=schemas.WeatherResponse)
+def weather(location: str):
+    return fetch_weather(location)
 
 
 @app.get("/api/user/profile", response_model=schemas.UserProfile)

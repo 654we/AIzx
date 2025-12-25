@@ -35,3 +35,25 @@ class UpdateLocation(BaseModel):
 
 class UpdateSubscriptions(BaseModel):
     tags: list[str] = []
+
+
+class WeatherLocation(BaseModel):
+    name: str
+    lat: float
+    lon: float
+
+
+class WeatherInfo(BaseModel):
+    condition: str
+    temp_c: float
+    humidity: int
+    wind: str
+    aqi: int
+    aqi_desc: str
+    updated_at: str
+
+
+class WeatherResponse(BaseModel):
+    location: WeatherLocation
+    weather: WeatherInfo
+    travel_advice: list[str]

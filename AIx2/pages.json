@@ -35,6 +35,12 @@
       "style": {
         "navigationBarTitleText": "注册"
       }
+    },
+    {
+      "path": "pages/location/index",
+      "style": {
+        "navigationBarTitleText": "位置设置"
+      }
     }
   ],
   "globalStyle": {
