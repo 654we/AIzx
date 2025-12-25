@@ -1,0 +1,33 @@
+# 进度记录
+
+## Phase 1
+- 状态：已完成
+- 完成内容：
+  - 输出 docs/PLAN.md 与 docs/API.md 初版
+  - FastAPI 后端骨架（JWT/SQLite/管理员初始化）
+  - UniApp 前端四个 Tab 页面骨架
+- 文件清单：
+  - docs/PLAN.md
+  - docs/API.md
+  - docs/PROGRESS.md
+  - backend/requirements.txt
+  - backend/app/config.py
+  - backend/app/database.py
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/auth.py
+  - backend/app/crud.py
+  - backend/app/deps.py
+  - backend/app/main.py
+  - AIx2/pages.json
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/weather/index.vue
+  - AIx2/pages/schedule/index.vue
+  - AIx2/pages/mine/index.vue
+  - AIx2/static/tab/*.png
+- 下一步：
+  - Phase 2 登录/注册与微信登录接口
+  - 前端登录/注册页面与 token 持久化
+- 遗留问题：
+  - 管理后台界面待实现
+  - 真实图标待替换

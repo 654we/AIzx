@@ -1,17 +1,59 @@
 {
-	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
-		{
-			"path": "pages/index/index",
-			"style": {
-				"navigationBarTitleText": "uni-app"
-			}
-		}
-	],
-	"globalStyle": {
-		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "uni-app",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
-	},
-	"uniIdRouter": {}
+  "pages": [
+    {
+      "path": "pages/news/index",
+      "style": {
+        "navigationBarTitleText": "资讯"
+      }
+    },
+    {
+      "path": "pages/weather/index",
+      "style": {
+        "navigationBarTitleText": "天气"
+      }
+    },
+    {
+      "path": "pages/schedule/index",
+      "style": {
+        "navigationBarTitleText": "日程"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "AIx2",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8"
+  },
+  "tabBar": {
+    "color": "#8b9098",
+    "selectedColor": "#1c1d1f",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/news/index",
+        "text": "资讯"
+      },
+      {
+        "pagePath": "pages/weather/index",
+        "text": "天气"
+      },
+      {
+        "pagePath": "pages/schedule/index",
+        "text": "日程"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "uniIdRouter": {}
 }
