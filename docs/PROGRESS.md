@@ -205,3 +205,13 @@
   - docs/PROGRESS.md
 - 下一步：
   - 完善 MCP 返回格式校验与错误告警
+
+## Phase 12
+- 状态：已完成
+- 完成内容：
+  - MCP 搜索响应结构校验与异常日志
+- 文件清单：
+  - backend/app/mcp_search.py
+  - docs/PROGRESS.md
+- 下一步：
+  - 增加告警/通知机制

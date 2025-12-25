@@ -5,6 +5,7 @@ import logging
 from typing import Callable
 
 import httpx
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app import crud
@@ -15,6 +16,18 @@ logger = logging.getLogger(__name__)
 def _setting_value(db: Session, key: str, default: str) -> str:
     item = crud.get_setting(db, key)
     return item.value if item else default
+
+
+class MCPItem(BaseModel):
+    title: str
+    url: str
+    summary: str | None = None
+    source: str | None = None
+    published_at: str | None = None
+
+
+class MCPResponse(BaseModel):
+    items: list[MCPItem]
 
 
 def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> None:
@@ -38,16 +51,19 @@ def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> No
     except httpx.HTTPError as exc:
         logger.exception("MCP search request failed: %s", exc)
         return
-    data = response.json()
-    items = data.get("items", [])
-    for item in items:
-        url = item.get("url")
+    try:
+        data = MCPResponse.model_validate(response.json())
+    except ValidationError as exc:
+        logger.exception("MCP response validation failed: %s", exc)
+        return
+    for item in data.items:
+        url = item.url
         if not url or crud.get_news_by_url(db, url):
             continue
-        title = item.get("title") or "未命名资讯"
-        summary = item.get("summary") or summarize(title, "")
-        source = item.get("source") or "MCP"
-        published_at = item.get("published_at") or datetime.datetime.now().isoformat()
+        title = item.title or "未命名资讯"
+        summary = item.summary or summarize(title, "")
+        source = item.source or "MCP"
+        published_at = item.published_at or datetime.datetime.now().isoformat()
         crud.create_news_item(
             db,
             title=title,
