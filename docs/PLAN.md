@@ -1,11 +1,11 @@
-# 项目规划文档（Phase 1 初版）
+# 项目规划文档（更新版）
 
 ## 1. 架构概览
 - 前端：UniApp（Vue2，目录 `/AIx2`），底部 Tab：资讯/天气/日程/我的。
-- 后端：FastAPI + SQLite + SQLAlchemy，提供 REST API + 管理后台入口（Phase 1 先提供基础接口骨架）。
-- AI 模块：提供统一 Provider 抽象（Phase 2+ 实现），支持 DeepSeek / GLM / OpenAI 兼容接口。
-- 任务调度：APScheduler（Phase 4+）。
-- 配置：`.env` + 数据库存储配置（Phase 2+ 完善）。
+- 后端：FastAPI + SQLite + SQLAlchemy，提供 REST API + 管理后台入口。
+- AI 模块：统一 Provider 抽象，支持 DeepSeek / GLM / OpenAI 兼容接口与路由策略。
+- 任务调度：APScheduler（资讯 RSS/MCP 拉取）。
+- 配置：`.env` + 数据库存储配置（后台可配置）。
 
 ## 2. 目录结构
 ```
@@ -37,7 +37,7 @@
 4. 天气：调用第三方天气接口 -> 生成出行建议 -> 返回前端。
 5. 日程：上传文档 -> AI 解析 -> 生成固定格式日程 JSON -> 返回前端并存档。
 
-## 4. 接口清单（Phase 1 先定义）
+## 4. 接口清单（当前实现）
 - POST /api/auth/register
 - POST /api/auth/login
 - POST /api/auth/wechat_login
@@ -51,8 +51,10 @@
 - /admin/login
 - /admin/settings
 - /admin/users
+- /admin/news
+- /admin/logout
 
-## 5. 阶段拆解
+## 5. 阶段拆解（规划与已完成）
 ### Phase 1（骨架与基础）
 - 文档：`docs/PLAN.md`、`docs/API.md` 初版。
 - 后端：FastAPI 启动、数据库模型、管理员初始化（admin/admin）、基础鉴权（JWT）。
@@ -76,6 +78,12 @@
 ### Phase 6（管理后台完善）
 - AI 接口管理、路由策略、配置管理、用户管理。
 - docs/ADMIN_GUIDE.md、docs/USER_GUIDE.md。
+
+### Phase 7-12（资讯自动化与 MCP）
+- AI 路由策略接入天气/日程。
+- 资讯管理与 AI 摘要。
+- RSS 定时抓取与去重入库。
+- MCP 搜索配置、占位实现与响应校验。
 
 ## 6. 验收标准（Phase 1）
 - `docs/PLAN.md`、`docs/API.md` 完整可读。
