@@ -504,6 +504,7 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "mcp_enabled": setting_value("mcp_enabled", "false"),
         "mcp_base_url": setting_value("mcp_base_url", ""),
         "mcp_api_key": setting_value("mcp_api_key", ""),
+        "mcp_keywords": setting_value("mcp_keywords", "资讯,科技,天气"),
         "ai_deepseek_api_key": setting_value("ai_deepseek_api_key", ""),
         "ai_deepseek_base_url": setting_value("ai_deepseek_base_url", "https://api.deepseek.com"),
         "ai_deepseek_model": setting_value("ai_deepseek_model", "deepseek-chat"),
@@ -536,6 +537,7 @@ def admin_settings_post(
     mcp_enabled: str = Form("false"),
     mcp_base_url: str = Form(""),
     mcp_api_key: str = Form(""),
+    mcp_keywords: str = Form(""),
     ai_deepseek_api_key: str = Form(""),
     ai_deepseek_base_url: str = Form(""),
     ai_deepseek_model: str = Form(""),
@@ -563,6 +565,7 @@ def admin_settings_post(
     crud.upsert_setting(db, "mcp_enabled", mcp_enabled)
     crud.upsert_setting(db, "mcp_base_url", mcp_base_url)
     crud.upsert_setting(db, "mcp_api_key", mcp_api_key)
+    crud.upsert_setting(db, "mcp_keywords", mcp_keywords)
     crud.upsert_setting(db, "ai_deepseek_api_key", ai_deepseek_api_key)
     crud.upsert_setting(db, "ai_deepseek_base_url", ai_deepseek_base_url)
     crud.upsert_setting(db, "ai_deepseek_model", ai_deepseek_model)

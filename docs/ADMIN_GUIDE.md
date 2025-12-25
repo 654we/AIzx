@@ -15,6 +15,7 @@
 - 订阅链接（逗号分隔）
 - 资讯来源模式（rss/mcp）
 - MCP 开关与接口地址
+- MCP 搜索关键词（逗号分隔）
 - AI 接口配置（DeepSeek / GLM / OpenAI 兼容）
 - AI 路由策略（资讯/天气/日程可选择不同 provider）
 

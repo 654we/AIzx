@@ -191,3 +191,17 @@
   - docs/PROGRESS.md
 - 下一步：
   - 对接真实 MCP 搜索与数据解析
+
+## Phase 11
+- 状态：已完成
+- 完成内容：
+  - MCP 搜索关键词配置与实际请求调用
+  - MCP 搜索结果入库与去重
+- 文件清单：
+  - backend/app/mcp_search.py
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - docs/ADMIN_GUIDE.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 完善 MCP 返回格式校验与错误告警
