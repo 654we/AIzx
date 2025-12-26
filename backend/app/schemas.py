@@ -76,6 +76,14 @@ class NewsResponse(BaseModel):
     has_more: bool
 
 
+class NewsPreviewResponse(BaseModel):
+    title: str
+    summary: str
+    key_points: list[str]
+    source_url: str
+    fetched_at: str
+
+
 class ScheduleMeta(BaseModel):
     source_filename: str
     generated_at: str

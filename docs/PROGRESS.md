@@ -277,3 +277,22 @@
   - Phase 4 资讯详情改造（preview 概况 + 前端详情页）
 - 风险：
   - 高德/第三方 Provider 需要有效 key 才可用
+
+## Fix Phase 4
+- 状态：已完成
+- 完成内容：
+  - 新增资讯预览接口并支持缓存（news_id 或 url）
+  - 前端资讯详情改为展示智能概况 + 来源链接与操作按钮
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/schemas.py
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/news/detail.vue
+  - AIx2/pages.json
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 5 日程文件上传增强（doc/docx/xls/xlsx/csv）
+- 风险：
+  - 资讯源站访问受限时预览可能失败，需要前端提示与重试

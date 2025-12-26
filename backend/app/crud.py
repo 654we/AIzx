@@ -67,6 +67,53 @@ def get_news_by_url(db: Session, url: str) -> models.NewsItem | None:
     return db.query(models.NewsItem).filter(models.NewsItem.url == url).first()
 
 
+def get_news_preview_by_news_id(db: Session, news_id: int) -> models.NewsPreview | None:
+    return db.query(models.NewsPreview).filter(models.NewsPreview.news_id == news_id).first()
+
+
+def get_news_preview_by_url(db: Session, url: str) -> models.NewsPreview | None:
+    return db.query(models.NewsPreview).filter(models.NewsPreview.source_url == url).first()
+
+
+def upsert_news_preview(
+    db: Session,
+    news_id: int | None,
+    source_url: str,
+    title: str,
+    summary: str,
+    key_points: str,
+    fetched_at: str,
+    cache_ttl_sec: int,
+) -> models.NewsPreview:
+    preview = None
+    if news_id:
+        preview = get_news_preview_by_news_id(db, news_id)
+    if not preview:
+        preview = get_news_preview_by_url(db, source_url)
+    if preview:
+        preview.news_id = news_id
+        preview.source_url = source_url
+        preview.title = title
+        preview.summary = summary
+        preview.key_points = key_points
+        preview.fetched_at = fetched_at
+        preview.cache_ttl_sec = cache_ttl_sec
+    else:
+        preview = models.NewsPreview(
+            news_id=news_id,
+            source_url=source_url,
+            title=title,
+            summary=summary,
+            key_points=key_points,
+            fetched_at=fetched_at,
+            cache_ttl_sec=cache_ttl_sec,
+        )
+        db.add(preview)
+    db.commit()
+    db.refresh(preview)
+    return preview
+
+
 def list_news(db: Session, tags: list[str], page: int, page_size: int) -> tuple[list[models.NewsItem], int]:
     query = db.query(models.NewsItem)
     if tags:

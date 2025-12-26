@@ -29,6 +29,19 @@ class NewsItem(Base):
     tags = Column(String(256), default="")
 
 
+class NewsPreview(Base):
+    __tablename__ = "news_previews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    news_id = Column(Integer, nullable=True, index=True)
+    source_url = Column(String(512), nullable=False, index=True)
+    title = Column(String(256), nullable=False)
+    summary = Column(String(512), nullable=False)
+    key_points = Column(Text, default="[]")
+    fetched_at = Column(String(64), nullable=False)
+    cache_ttl_sec = Column(Integer, default=3600)
+
+
 class SchedulePlan(Base):
     __tablename__ = "schedule_plans"
 

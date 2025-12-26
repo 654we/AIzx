@@ -1,5 +1,7 @@
+import html
 import json
 import os
+import re
 import time
 from datetime import datetime, timedelta
 
@@ -430,6 +432,72 @@ def news_summary_from_ai(db: Session, title: str, content: str) -> str:
         return content[:120] if content else "暂无摘要"
 
 
+def news_keypoints_from_ai(db: Session, title: str, content: str) -> list[str]:
+    route = get_route(db, "ai_route_news", "deepseek")
+    if not provider_ready(db, route):
+        fallback = [line.strip() for line in content.split("。") if line.strip()]
+        return fallback[:3] if fallback else ["暂无要点"]
+    provider = build_provider(route, db)
+    prompt = (
+        "请为以下资讯生成3条关键要点，每条不超过20字，使用中文。"
+        f"标题：{title}\n内容：{content}\n"
+        "仅返回要点列表，每行一条。"
+    )
+    try:
+        text = provider.generate(prompt)
+        lines = [line.strip("- ").strip() for line in text.splitlines() if line.strip()]
+        return lines[:3] if lines else ["暂无要点"]
+    except Exception:
+        fallback = [line.strip() for line in content.split("。") if line.strip()]
+        return fallback[:3] if fallback else ["暂无要点"]
+
+
+def extract_text_from_html(raw_html: str) -> str:
+    cleaned = re.sub(r"<script.*?>.*?</script>", " ", raw_html, flags=re.S | re.I)
+    cleaned = re.sub(r"<style.*?>.*?</style>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = html.unescape(cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def extract_title_from_html(raw_html: str, fallback: str) -> str:
+    match = re.search(r"<title>(.*?)</title>", raw_html, flags=re.I | re.S)
+    if match:
+        return html.unescape(match.group(1)).strip()
+    return fallback
+
+
+def build_news_preview(
+    db: Session,
+    source_url: str,
+    title_hint: str,
+    content_text: str,
+    cache_ttl_sec: int,
+    news_id: int | None,
+) -> schemas.NewsPreviewResponse:
+    summary = news_summary_from_ai(db, title_hint, content_text)
+    key_points = news_keypoints_from_ai(db, title_hint, content_text)
+    fetched_at = datetime.now().isoformat()
+    crud.upsert_news_preview(
+        db,
+        news_id=news_id,
+        source_url=source_url,
+        title=title_hint,
+        summary=summary,
+        key_points=json.dumps(key_points, ensure_ascii=False),
+        fetched_at=fetched_at,
+        cache_ttl_sec=cache_ttl_sec,
+    )
+    return schemas.NewsPreviewResponse(
+        title=title_hint,
+        summary=summary,
+        key_points=key_points,
+        source_url=source_url,
+        fetched_at=fetched_at,
+    )
+
+
 def run_news_crawler(limit: int | None = None, force_run: bool = False) -> dict:
     db = next(get_db())
     created = 0
@@ -548,6 +616,78 @@ def news(
         page=page,
         page_size=page_size,
         has_more=page * page_size < total,
+    )
+
+
+@app.get("/api/news/{news_id}/preview", response_model=schemas.NewsPreviewResponse)
+def news_preview(news_id: int, db: Session = Depends(get_db)):
+    preview = crud.get_news_preview_by_news_id(db, news_id)
+    if preview:
+        try:
+            fetched_time = datetime.fromisoformat(preview.fetched_at)
+            if (datetime.now() - fetched_time).total_seconds() < preview.cache_ttl_sec:
+                return schemas.NewsPreviewResponse(
+                    title=preview.title,
+                    summary=preview.summary,
+                    key_points=json.loads(preview.key_points or "[]"),
+                    source_url=preview.source_url,
+                    fetched_at=preview.fetched_at,
+                )
+        except Exception:
+            pass
+    item = db.query(models.NewsItem).filter(models.NewsItem.id == news_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="News not found")
+    try:
+        response = httpx.get(item.url, timeout=8.0)
+        response.raise_for_status()
+        title_hint = extract_title_from_html(response.text, item.title)
+        text = extract_text_from_html(response.text)[:2000]
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Preview fetch failed") from exc
+    return build_news_preview(
+        db,
+        source_url=item.url,
+        title_hint=title_hint,
+        content_text=text,
+        cache_ttl_sec=3600,
+        news_id=news_id,
+    )
+
+
+@app.post("/api/news/preview", response_model=schemas.NewsPreviewResponse)
+def news_preview_by_url(payload: dict = Body(default={}), db: Session = Depends(get_db)):
+    url = payload.get("url", "")
+    if not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url required")
+    preview = crud.get_news_preview_by_url(db, url)
+    if preview:
+        try:
+            fetched_time = datetime.fromisoformat(preview.fetched_at)
+            if (datetime.now() - fetched_time).total_seconds() < preview.cache_ttl_sec:
+                return schemas.NewsPreviewResponse(
+                    title=preview.title,
+                    summary=preview.summary,
+                    key_points=json.loads(preview.key_points or "[]"),
+                    source_url=preview.source_url,
+                    fetched_at=preview.fetched_at,
+                )
+        except Exception:
+            pass
+    try:
+        response = httpx.get(url, timeout=8.0)
+        response.raise_for_status()
+        title_hint = extract_title_from_html(response.text, url)
+        text = extract_text_from_html(response.text)[:2000]
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Preview fetch failed") from exc
+    return build_news_preview(
+        db,
+        source_url=url,
+        title_hint=title_hint,
+        content_text=text,
+        cache_ttl_sec=3600,
+        news_id=None,
     )
 
 
