@@ -117,6 +117,7 @@ class MCPRemoteConfig(Base):
     protocol = Column(String(32), default="http")
     auth_type = Column(String(32), default="none")
     auth_value = Column(String(256), default="")
+    extra_config = Column(Text, default="{}")
     timeout_sec = Column(Integer, default=10)
     enabled = Column(Boolean, default=True)
     priority = Column(Integer, default=1)

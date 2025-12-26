@@ -368,6 +368,7 @@ def create_mcp_remote(
     protocol: str,
     auth_type: str,
     auth_value: str,
+    extra_config: str,
     timeout_sec: int,
     enabled: bool,
     priority: int,
@@ -378,6 +379,7 @@ def create_mcp_remote(
         protocol=protocol,
         auth_type=auth_type,
         auth_value=auth_value,
+        extra_config=extra_config,
         timeout_sec=timeout_sec,
         enabled=enabled,
         priority=priority,
@@ -404,6 +406,7 @@ def update_mcp_remote(
     protocol: str,
     auth_type: str,
     auth_value: str,
+    extra_config: str,
     timeout_sec: int,
     enabled: bool,
     priority: int,
@@ -413,6 +416,7 @@ def update_mcp_remote(
     remote.protocol = protocol
     remote.auth_type = auth_type
     remote.auth_value = auth_value
+    remote.extra_config = extra_config
     remote.timeout_sec = timeout_sec
     remote.enabled = enabled
     remote.priority = priority

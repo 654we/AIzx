@@ -253,7 +253,7 @@ Authorization: Bearer <token>
 ### PUT /admin/api/mcp/remotes/{id}
 ### DELETE /admin/api/mcp/remotes/{id}
 - Schema:\n```json
-{ "name": "", "base_url": "", "protocol": "http|streamable_http", "auth_type": "api_key|token|none", "auth_value": "", "timeout_sec": 10, "enabled": true, "priority": 1 }
+{ "name": "", "base_url": "", "protocol": "http|streamable_http", "auth_type": "api_key|token|none", "auth_value": "", "extra_config": {"payload_template": {"query": "{query}", "limit": "{limit}"}, "headers": {}}, "timeout_sec": 10, "enabled": true, "priority": 1 }
 ```
 
 ### POST /admin/api/mcp/remotes/{id}/test

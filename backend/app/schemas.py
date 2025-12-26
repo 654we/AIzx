@@ -154,6 +154,7 @@ class MCPRemoteConfigPayload(BaseModel):
     protocol: str = "http"
     auth_type: str = "none"
     auth_value: str = ""
+    extra_config: dict = {}
     timeout_sec: int = 10
     enabled: bool = True
     priority: int = 1

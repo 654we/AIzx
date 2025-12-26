@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 from typing import Callable
 
@@ -46,6 +47,19 @@ def parse_streamable_response(lines: list[str]) -> MCPResponse | None:
     return None
 
 
+def apply_payload_template(template: dict, query: str, limit: int):
+    def replace_value(value):
+        if isinstance(value, str):
+            return value.replace("{query}", query).replace("{limit}", str(limit))
+        if isinstance(value, dict):
+            return {key: replace_value(val) for key, val in value.items()}
+        if isinstance(value, list):
+            return [replace_value(item) for item in value]
+        return value
+
+    return replace_value(template)
+
+
 def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> None:
     """Call MCP search endpoint and persist results.
 
@@ -62,17 +76,27 @@ def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> No
         base_url = remote.base_url
         timeout = remote.timeout_sec
         protocol = remote.protocol or "http"
+        extra_config = remote.extra_config or "{}"
     else:
         enabled = _setting_value(db, "mcp_enabled", "false").lower() == "true"
         base_url = _setting_value(db, "mcp_base_url", "")
         api_key = _setting_value(db, "mcp_api_key", "")
         timeout = 10.0
         protocol = "http"
+        extra_config = "{}"
         if not enabled or not base_url:
             logger.info("MCP search disabled or base_url missing")
             return
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     payload = {"query": keywords, "limit": 10}
+    try:
+        extra = json.loads(extra_config)
+        if isinstance(extra, dict) and extra.get("headers"):
+            headers.update(extra.get("headers"))
+        if isinstance(extra, dict) and extra.get("payload_template"):
+            payload = apply_payload_template(extra["payload_template"], keywords, 10)
+    except json.JSONDecodeError:
+        logger.warning("MCP extra_config invalid JSON")
     try:
         data = fetch_mcp_items(base_url, headers, payload, timeout, protocol)
     except httpx.HTTPError as exc:
@@ -108,17 +132,27 @@ def fetch_mcp_candidates(db: Session, limit: int) -> list[dict]:
         base_url = remote.base_url
         timeout = remote.timeout_sec
         protocol = remote.protocol or "http"
+        extra_config = remote.extra_config or "{}"
     else:
         enabled = _setting_value(db, "mcp_enabled", "false").lower() == "true"
         base_url = _setting_value(db, "mcp_base_url", "")
         api_key = _setting_value(db, "mcp_api_key", "")
         timeout = 10.0
         protocol = "http"
+        extra_config = "{}"
         if not enabled or not base_url:
             logger.info("MCP search disabled or base_url missing")
             return []
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     payload = {"query": keywords, "limit": limit}
+    try:
+        extra = json.loads(extra_config)
+        if isinstance(extra, dict) and extra.get("headers"):
+            headers.update(extra.get("headers"))
+        if isinstance(extra, dict) and extra.get("payload_template"):
+            payload = apply_payload_template(extra["payload_template"], keywords, limit)
+    except json.JSONDecodeError:
+        logger.warning("MCP extra_config invalid JSON")
     try:
         data = fetch_mcp_items(base_url, headers, payload, timeout, protocol)
     except httpx.HTTPError as exc:

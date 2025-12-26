@@ -432,3 +432,22 @@
   - 继续回归测试 UI 表单保存逻辑
 - 风险：
   - 同时填写 cron 与时间选择器时以时间选择器为准
+
+## Fix Phase C
+- 状态：已完成
+- 完成内容：
+  - MCP 远程配置支持 extra_config，用于自定义 headers 与 payload 模板
+  - 管理后台 MCP 表单支持配置 extra_config
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_mcp.html
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 依据第三方 MCP 文档填写 payload_template 解决 400
+- 风险：
+  - extra_config JSON 格式错误会导致请求使用默认 payload
