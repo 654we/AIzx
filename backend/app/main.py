@@ -2039,17 +2039,33 @@ def admin_api_mcp_local_test(local_id: int, request: Request, db: Session = Depe
             args = [local.command] + json.loads(local.args_json or "[]")
             env = os.environ.copy()
             env.update(json.loads(local.env_json or "{}"))
-            result = subprocess.run(
+            timeout_sec = local.timeout_sec or 10
+            process = subprocess.Popen(
                 args,
-                capture_output=True,
-                check=True,
-                timeout=local.timeout_sec or 10,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 env=env,
                 text=True,
             )
-            stderr = (result.stderr or "").strip()
-            if stderr:
-                error_message = stderr[:200]
+            try:
+                stdout, stderr = process.communicate(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1)
+                error_message = "命令在超时内未退出，可能为常驻服务"
+            else:
+                if process.returncode != 0:
+                    status_text = "failed"
+                    output = (stderr or stdout or "").strip()
+                    error_message = output[:200] if output else f"命令退出码 {process.returncode}"
+                else:
+                    stderr = (stderr or "").strip()
+                    if stderr:
+                        error_message = stderr[:200]
         else:
             test_plugin(local.module_path)
     except MCPPluginError as exc:
