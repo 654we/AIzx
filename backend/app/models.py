@@ -52,6 +52,20 @@ class SchedulePlan(Base):
     created_at = Column(String(64), nullable=False)
 
 
+class ScheduleUpload(Base):
+    __tablename__ = "schedule_uploads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    filename = Column(String(256), nullable=False)
+    file_type = Column(String(32), nullable=False)
+    file_size = Column(Integer, default=0)
+    stored_path = Column(String(512), nullable=False)
+    status = Column(String(32), default="uploaded")
+    parsed_text = Column(Text, default="")
+    created_at = Column(String(64), nullable=False)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 

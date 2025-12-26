@@ -149,6 +149,33 @@ def create_schedule_plan(
     return plan
 
 
+def create_schedule_upload(
+    db: Session,
+    user_id: int,
+    filename: str,
+    file_type: str,
+    file_size: int,
+    stored_path: str,
+    status: str,
+    parsed_text: str,
+    created_at: str,
+) -> models.ScheduleUpload:
+    upload = models.ScheduleUpload(
+        user_id=user_id,
+        filename=filename,
+        file_type=file_type,
+        file_size=file_size,
+        stored_path=stored_path,
+        status=status,
+        parsed_text=parsed_text,
+        created_at=created_at,
+    )
+    db.add(upload)
+    db.commit()
+    db.refresh(upload)
+    return upload
+
+
 def get_latest_schedule(db: Session, user_id: int) -> models.SchedulePlan | None:
     return (
         db.query(models.SchedulePlan)

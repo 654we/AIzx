@@ -9,6 +9,9 @@
       <button class="primary" @click="pickFile">上传日程文件</button>
       <button class="ghost" @click="loadLatest">获取最新日程</button>
     </view>
+    <view class="upload-status" v-if="uploadStatus">
+      <text>{{ uploadStatus }}</text>
+    </view>
 
     <view class="table">
       <view class="time-column">
@@ -37,7 +40,8 @@ export default {
     return {
       times: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'],
       blocks: [],
-      tips: []
+      tips: [],
+      uploadStatus: ''
     }
   },
   onShow() {
@@ -48,11 +52,11 @@ export default {
       uni.chooseMessageFile({
         count: 1,
         type: 'file',
-        extension: ['txt', 'md', 'csv'],
+        extension: ['txt', 'md', 'csv', 'doc', 'docx', 'xls', 'xlsx'],
         success: (res) => {
           const file = res.tempFiles[0]
           if (!file) return
-          uni.uploadFile({
+          const uploadTask = uni.uploadFile({
             url: 'http://localhost:8000/api/schedule/upload',
             filePath: file.path,
             name: 'file',
@@ -63,10 +67,15 @@ export default {
               const data = JSON.parse(uploadRes.data)
               this.applyPlan(data)
               uni.showToast({ title: '上传成功', icon: 'none' })
+              this.uploadStatus = ''
             },
             fail: () => {
               uni.showToast({ title: '上传失败', icon: 'none' })
+              this.uploadStatus = ''
             }
+          })
+          uploadTask.onProgressUpdate((progress) => {
+            this.uploadStatus = `上传进度 ${progress.progress}%`
           })
         }
       })
@@ -192,5 +201,10 @@ export default {
   font-size: 28rpx;
   font-weight: 600;
   color: #1c1d1f;
+}
+.upload-status {
+  margin-bottom: 20rpx;
+  font-size: 24rpx;
+  color: #6b7280;
 }
 </style>

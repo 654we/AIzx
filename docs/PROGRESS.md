@@ -296,3 +296,21 @@
   - Phase 5 日程文件上传增强（doc/docx/xls/xlsx/csv）
 - 风险：
   - 资讯源站访问受限时预览可能失败，需要前端提示与重试
+
+## Fix Phase 5
+- 状态：已完成
+- 完成内容：
+  - 日程上传支持 doc/docx/xls/xlsx/csv/txt/md 解析与元数据记录
+  - 后端增加文本解析与日程校验排序逻辑
+  - 前端上传扩展格式并显示上传进度
+- 文件清单：
+  - backend/requirements.txt
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/schedule/index.vue
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 6 我的页面补齐（资料编辑 + 订阅标签管理）
+- 风险：
+  - .doc 文档解析为兼容兜底，复杂格式可能解析不完整

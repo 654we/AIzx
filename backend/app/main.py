@@ -1,4 +1,6 @@
+import csv
 import html
+import io
 import json
 import os
 import re
@@ -27,6 +29,10 @@ from app.config import settings
 from app.database import init_db
 from app.deps import get_db
 from app.mcp.registry import MCPPluginError, test_plugin
+
+from docx import Document
+from openpyxl import load_workbook
+import xlrd
 
 app = FastAPI(title=settings.app_name)
 app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
@@ -393,6 +399,71 @@ def build_schedule_plan(source_filename: str) -> schemas.ScheduleResponse:
     )
 
 
+def normalize_schedule(plan: schemas.ScheduleResponse) -> schemas.ScheduleResponse:
+    normalized_week = []
+    for day in plan.week:
+        blocks = sorted(day.blocks, key=lambda item: item.start)
+        cleaned_blocks = []
+        last_end = ""
+        for block in blocks:
+            if block.end <= block.start:
+                continue
+            if last_end and block.start < last_end:
+                continue
+            cleaned_blocks.append(block)
+            last_end = block.end
+        normalized_week.append(
+            schemas.ScheduleDay(
+                date=day.date,
+                day_of_week=day.day_of_week,
+                blocks=cleaned_blocks,
+            )
+        )
+    return schemas.ScheduleResponse(meta=plan.meta, week=normalized_week, tips=plan.tips)
+
+
+def parse_text_file(content: bytes) -> str:
+    return content.decode("utf-8", errors="ignore")
+
+
+def parse_docx(content: bytes) -> str:
+    document = Document(io.BytesIO(content))
+    return "\n".join([para.text for para in document.paragraphs if para.text.strip()])
+
+
+def parse_xlsx(content: bytes) -> str:
+    workbook = load_workbook(io.BytesIO(content), data_only=True)
+    lines = []
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows(values_only=True):
+            row_values = [str(cell) for cell in row if cell is not None]
+            if row_values:
+                lines.append(" ".join(row_values))
+    return "\n".join(lines)
+
+
+def parse_xls(content: bytes) -> str:
+    workbook = xlrd.open_workbook(file_contents=content)
+    lines = []
+    for sheet in workbook.sheets():
+        for row_index in range(sheet.nrows):
+            row_values = [str(cell.value) for cell in sheet.row(row_index) if cell.value]
+            if row_values:
+                lines.append(" ".join(row_values))
+    return "\n".join(lines)
+
+
+def parse_csv(content: bytes) -> str:
+    text = content.decode("utf-8", errors="ignore")
+    reader = csv.reader(io.StringIO(text))
+    lines = []
+    for row in reader:
+        row_values = [item for item in row if item]
+        if row_values:
+            lines.append(" ".join(row_values))
+    return "\n".join(lines)
+
+
 def schedule_from_ai(db: Session, source_filename: str, content: str) -> schemas.ScheduleResponse:
     route = get_route(db, "ai_route_schedule", "glm")
     if not provider_ready(db, route):
@@ -699,7 +770,7 @@ def upload_schedule(
 ):
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File required")
-    if not file.filename.lower().endswith((".txt", ".md", ".csv")):
+    if not file.filename.lower().endswith((".txt", ".md", ".csv", ".doc", ".docx", ".xls", ".xlsx")):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
     content = file.file.read()
     if len(content) > 2 * 1024 * 1024:
@@ -708,8 +779,34 @@ def upload_schedule(
     stored_path = os.path.join("uploads", f"{current_user.id}_{file.filename}")
     with open(stored_path, "wb") as f:
         f.write(content)
-    content_text = content.decode("utf-8", errors="ignore")
+    file_lower = file.filename.lower()
+    if file_lower.endswith((".txt", ".md")):
+        content_text = parse_text_file(content)
+    elif file_lower.endswith(".csv"):
+        content_text = parse_csv(content)
+    elif file_lower.endswith(".docx"):
+        content_text = parse_docx(content)
+    elif file_lower.endswith(".doc"):
+        content_text = parse_text_file(content)
+    elif file_lower.endswith(".xlsx"):
+        content_text = parse_xlsx(content)
+    elif file_lower.endswith(".xls"):
+        content_text = parse_xls(content)
+    else:
+        content_text = ""
+    crud.create_schedule_upload(
+        db,
+        user_id=current_user.id,
+        filename=file.filename,
+        file_type=os.path.splitext(file.filename)[-1].lstrip("."),
+        file_size=len(content),
+        stored_path=stored_path,
+        status="parsed" if content_text else "failed",
+        parsed_text=content_text,
+        created_at=datetime.now().isoformat(),
+    )
     plan = schedule_from_ai(db, file.filename, content_text)
+    plan = normalize_schedule(plan)
     payload = plan.model_dump_json()
     crud.create_schedule_plan(
         db,
