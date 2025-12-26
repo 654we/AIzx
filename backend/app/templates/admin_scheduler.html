@@ -29,6 +29,9 @@
     </div>
     <h2>资讯定时任务</h2>
     <p class="hint">下一次执行时间：{{ settings.next_run_at }}</p>
+    {% if settings.scheduler_error %}
+    <p class="hint" style="color:#b91c1c;">{{ settings.scheduler_error }}</p>
+    {% endif %}
     <form method="post">
       <label>启用（true/false）</label>
       <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />

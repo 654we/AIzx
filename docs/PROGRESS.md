@@ -336,3 +336,17 @@
   - 全链路回归自测与文档补齐（如需）
 - 风险：
   - 用户名冲突将返回 409，需要前端提示
+
+## Fix Phase 7
+- 状态：已完成
+- 完成内容：
+  - 定时任务配置对无效 cron 做容错并回退到间隔模式
+  - 管理后台显示调度错误提示
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_scheduler.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 继续全链路回归测试与缺陷修复
+- 风险：
+  - 需在后台提示管理员修正 cron 表达式

@@ -94,14 +94,18 @@ def configure_news_scheduler(db: Session) -> dict:
     interval_minutes = int(_setting_value(db, "news_crawler_interval_minutes", "30") or 30)
     if scheduler.get_job("news_crawler"):
         scheduler.remove_job("news_crawler")
+    scheduler_error = ""
     if cron_expr:
-        scheduler.add_job(
-            run_news_crawler,
-            CronTrigger.from_crontab(cron_expr),
-            id="news_crawler",
-            replace_existing=True,
-        )
-    else:
+        try:
+            scheduler.add_job(
+                run_news_crawler,
+                CronTrigger.from_crontab(cron_expr),
+                id="news_crawler",
+                replace_existing=True,
+            )
+        except ValueError as exc:
+            scheduler_error = f"cron 无效，已回退到间隔模式: {exc}"
+    if not scheduler.get_job("news_crawler"):
         scheduler.add_job(
             run_news_crawler,
             "interval",
@@ -112,7 +116,10 @@ def configure_news_scheduler(db: Session) -> dict:
     if not scheduler.running:
         scheduler.start(paused=False)
     job = scheduler.get_job("news_crawler")
-    return {"next_run_at": job.next_run_time.isoformat() if job else ""}
+    return {
+        "next_run_at": job.next_run_time.isoformat() if job else "",
+        "error": scheduler_error,
+    }
 
 
 @app.on_event("startup")
@@ -1177,6 +1184,7 @@ def admin_scheduler(request: Request, db: Session = Depends(get_db)):
         "news_source_mcp": _setting_value(db, "news_source_mcp", "false"),
         "news_source_feeds": _setting_value(db, "news_source_feeds", "true"),
         "next_run_at": scheduler_info.get("next_run_at", ""),
+        "scheduler_error": scheduler_info.get("error", ""),
     }
     return templates.TemplateResponse(
         "admin_scheduler.html",
