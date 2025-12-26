@@ -357,6 +357,7 @@ def create_mcp_remote(
     db: Session,
     name: str,
     base_url: str,
+    protocol: str,
     auth_type: str,
     auth_value: str,
     timeout_sec: int,
@@ -366,6 +367,7 @@ def create_mcp_remote(
     remote = models.MCPRemoteConfig(
         name=name,
         base_url=base_url,
+        protocol=protocol,
         auth_type=auth_type,
         auth_value=auth_value,
         timeout_sec=timeout_sec,
@@ -391,6 +393,7 @@ def update_mcp_remote(
     remote: models.MCPRemoteConfig,
     name: str,
     base_url: str,
+    protocol: str,
     auth_type: str,
     auth_value: str,
     timeout_sec: int,
@@ -399,6 +402,7 @@ def update_mcp_remote(
 ) -> models.MCPRemoteConfig:
     remote.name = name
     remote.base_url = base_url
+    remote.protocol = protocol
     remote.auth_type = auth_type
     remote.auth_value = auth_value
     remote.timeout_sec = timeout_sec

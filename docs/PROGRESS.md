@@ -350,3 +350,22 @@
   - 继续全链路回归测试与缺陷修复
 - 风险：
   - 需在后台提示管理员修正 cron 表达式
+
+## Fix Phase 8
+- 状态：已完成
+- 完成内容：
+  - MCP 远程配置新增 protocol 字段（支持 http 与 streamable_http）
+  - MCP 搜索支持解析 streamable_http 流式响应
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_mcp.html
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 验证第三方 MCP 流式返回结构与字段映射
+- 风险：
+  - 远程 MCP 响应格式不符合 items 结构会导致解析失败

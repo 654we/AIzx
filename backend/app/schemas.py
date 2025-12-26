@@ -150,6 +150,7 @@ class SchedulerConfig(BaseModel):
 class MCPRemoteConfigPayload(BaseModel):
     name: str
     base_url: str
+    protocol: str = "http"
     auth_type: str = "none"
     auth_value: str = ""
     timeout_sec: int = 10

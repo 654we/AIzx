@@ -110,6 +110,7 @@ class MCPRemoteConfig(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(128), nullable=False)
     base_url = Column(String(256), nullable=False)
+    protocol = Column(String(32), default="http")
     auth_type = Column(String(32), default="none")
     auth_value = Column(String(256), default="")
     timeout_sec = Column(Integer, default=10)

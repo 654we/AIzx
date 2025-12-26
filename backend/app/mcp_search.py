@@ -30,17 +30,29 @@ class MCPResponse(BaseModel):
     items: list[MCPItem]
 
 
+def parse_streamable_response(lines: list[str]) -> MCPResponse | None:
+    for raw in reversed(lines):
+        if not raw:
+            continue
+        if raw.startswith("data:"):
+            raw = raw.replace("data:", "", 1).strip()
+        if not raw:
+            continue
+        try:
+            payload = MCPResponse.model_validate_json(raw)
+            return payload
+        except ValidationError:
+            continue
+    return None
+
+
 def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> None:
     """Call MCP search endpoint and persist results.
 
     Expected MCP response JSON format:
     {"items": [{"title": "", "url": "", "summary": "", "source": "", "published_at": ""}]}
     """
-    remotes = [
-        remote
-        for remote in crud.list_mcp_remotes(db)
-        if remote.enabled and remote.base_url
-    ]
+    remotes = [remote for remote in crud.list_mcp_remotes(db) if remote.enabled and remote.base_url]
     keywords = _setting_value(db, "mcp_keywords", "资讯,科技")
     if remotes:
         remote = remotes[0]
@@ -49,26 +61,36 @@ def search_news_via_mcp(db: Session, summarize: Callable[[str, str], str]) -> No
             headers["Authorization"] = f"Bearer {remote.auth_value}"
         base_url = remote.base_url
         timeout = remote.timeout_sec
+        protocol = remote.protocol or "http"
     else:
         enabled = _setting_value(db, "mcp_enabled", "false").lower() == "true"
         base_url = _setting_value(db, "mcp_base_url", "")
         api_key = _setting_value(db, "mcp_api_key", "")
         timeout = 10.0
+        protocol = "http"
         if not enabled or not base_url:
             logger.info("MCP search disabled or base_url missing")
             return
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     payload = {"query": keywords, "limit": 10}
     try:
-        response = httpx.post(base_url, json=payload, headers=headers, timeout=timeout)
-        response.raise_for_status()
+        if protocol == "streamable_http":
+            lines = []
+            with httpx.stream("POST", base_url, json=payload, headers=headers, timeout=timeout) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if line:
+                        lines.append(line.decode("utf-8", errors="ignore") if isinstance(line, bytes) else line)
+            data = parse_streamable_response(lines)
+            if not data:
+                logger.warning("Streamable MCP response invalid")
+                return
+        else:
+            response = httpx.post(base_url, json=payload, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            data = MCPResponse.model_validate(response.json())
     except httpx.HTTPError as exc:
         logger.exception("MCP search request failed: %s", exc)
-        return
-    try:
-        data = MCPResponse.model_validate(response.json())
-    except ValidationError as exc:
-        logger.exception("MCP response validation failed: %s", exc)
         return
     for item in data.items:
         url = item.url
