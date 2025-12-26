@@ -34,6 +34,7 @@
 
 <script>
 import { request } from '../../utils/request'
+import { chooseUploadFile, normalizeChosenFile } from '../../utils/upload'
 
 export default {
   data() {
@@ -49,12 +50,9 @@ export default {
   },
   methods: {
     pickFile() {
-      uni.chooseMessageFile({
-        count: 1,
-        type: 'file',
-        extension: ['txt', 'md', 'csv', 'doc', 'docx', 'xls', 'xlsx'],
-        success: (res) => {
-          const file = res.tempFiles[0]
+      chooseUploadFile()
+        .then((res) => {
+          const file = normalizeChosenFile(res)
           if (!file) return
           const uploadTask = uni.uploadFile({
             url: 'http://localhost:8000/api/schedule/upload',
@@ -77,8 +75,10 @@ export default {
           uploadTask.onProgressUpdate((progress) => {
             this.uploadStatus = `上传进度 ${progress.progress}%`
           })
-        }
-      })
+        })
+        .catch(() => {
+          uni.showToast({ title: '文件选择失败', icon: 'none' })
+        })
     },
     loadLatest() {
       request({ url: '/api/schedule/latest' })
