@@ -13,6 +13,9 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     location = Column(String(128), default="")
+    email = Column(String(128), default="")
+    phone = Column(String(32), default="")
+    avatar_url = Column(String(512), default="")
     subscriptions = Column(String(512), default="")
     wechat_openid = Column(String(128), unique=True, nullable=True, index=True)
 

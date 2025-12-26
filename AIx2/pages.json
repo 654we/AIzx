@@ -53,6 +53,18 @@
       "style": {
         "navigationBarTitleText": "资讯概况"
       }
+    },
+    {
+      "path": "pages/mine/profile",
+      "style": {
+        "navigationBarTitleText": "账号信息"
+      }
+    },
+    {
+      "path": "pages/mine/subscriptions",
+      "style": {
+        "navigationBarTitleText": "订阅标签"
+      }
     }
   ],
   "globalStyle": {

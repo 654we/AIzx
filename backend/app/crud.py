@@ -230,9 +230,15 @@ def update_user_profile(
     username: str,
     location: str,
     subscriptions: list[str],
+    email: str = "",
+    phone: str = "",
+    avatar_url: str = "",
 ) -> models.User:
     user.username = username
     user.location = location
+    user.email = email
+    user.phone = phone
+    user.avatar_url = avatar_url
     user.subscriptions = ",".join(subscriptions)
     db.add(user)
     db.commit()

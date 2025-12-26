@@ -53,7 +53,14 @@ Authorization: Bearer <token>
 - 说明：获取用户信息
 - Response:
 ```json
-{ "id": 1, "username": "string", "location": "string", "subscriptions": [] }
+{ "id": 1, "username": "string", "location": "string", "email": "", "phone": "", "avatar_url": "", "subscriptions": [] }
+```
+
+### PUT /api/user/profile
+- 说明：更新用户资料
+- Body:
+```json
+{ "username": "string", "location": "string", "email": "", "phone": "", "avatar_url": "" }
 ```
 
 ### PUT /api/user/location
@@ -68,6 +75,20 @@ Authorization: Bearer <token>
 - Body:
 ```json
 { "tags": ["tag1", "tag2"] }
+```
+
+### GET /api/user/subscriptions
+- 说明：获取订阅标签
+- Response:
+```json
+{ "tags": ["tag1", "tag2"] }
+```
+
+### PUT /api/user/password
+- 说明：修改密码
+- Body:
+```json
+{ "old_password": "string", "new_password": "string" }
 ```
 
 ## 资讯

@@ -26,6 +26,9 @@ class UserProfile(BaseModel):
     id: int
     username: str
     location: str = ""
+    email: str = ""
+    phone: str = ""
+    avatar_url: str = ""
     subscriptions: list[str] = []
 
 
@@ -35,6 +38,19 @@ class UpdateLocation(BaseModel):
 
 class UpdateSubscriptions(BaseModel):
     tags: list[str] = []
+
+
+class UpdateUserProfile(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    location: str = ""
+    email: str = ""
+    phone: str = ""
+    avatar_url: str = ""
+
+
+class UpdateUserPassword(BaseModel):
+    old_password: str = Field(..., min_length=6, max_length=128)
+    new_password: str = Field(..., min_length=6, max_length=128)
 
 
 class WeatherLocation(BaseModel):

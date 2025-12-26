@@ -833,8 +833,33 @@ def profile(current_user=Depends(get_current_user)):
         id=current_user.id,
         username=current_user.username,
         location=current_user.location,
+        email=current_user.email,
+        phone=current_user.phone,
+        avatar_url=current_user.avatar_url,
         subscriptions=subscriptions,
     )
+
+
+@app.put("/api/user/profile")
+def update_profile(
+    payload: schemas.UpdateUserProfile,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    existing = crud.get_user_by_username(db, payload.username)
+    if existing and existing.id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+    crud.update_user_profile(
+        db,
+        current_user,
+        username=payload.username,
+        location=payload.location,
+        subscriptions=[tag for tag in current_user.subscriptions.split(",") if tag],
+        email=payload.email,
+        phone=payload.phone,
+        avatar_url=payload.avatar_url,
+    )
+    return {"status": "ok"}
 
 
 @app.put("/api/user/location")
@@ -858,6 +883,24 @@ def update_subscriptions(
     current_user.subscriptions = ",".join(payload.tags)
     db.add(current_user)
     db.commit()
+    return {"status": "ok"}
+
+
+@app.get("/api/user/subscriptions")
+def get_subscriptions(current_user=Depends(get_current_user)):
+    return {"tags": [tag for tag in current_user.subscriptions.split(",") if tag]}
+
+
+@app.put("/api/user/password")
+def update_password(
+    payload: schemas.UpdateUserPassword,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = crud.authenticate_user(db, current_user.username, payload.old_password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Old password incorrect")
+    crud.reset_user_password(db, current_user, payload.new_password)
     return {"status": "ok"}
 
 
@@ -1088,6 +1131,9 @@ def admin_user_detail_post(
             username=username,
             location=location,
             subscriptions=[tag.strip() for tag in subscriptions.split(",") if tag.strip()],
+            email=user.email,
+            phone=user.phone,
+            avatar_url=user.avatar_url,
         )
         if reset_password:
             crud.reset_user_password(db, updated_user, reset_password)
@@ -1700,6 +1746,9 @@ def admin_api_user_update(
         username=payload.username,
         location=payload.location,
         subscriptions=payload.subscriptions,
+        email=user.email,
+        phone=user.phone,
+        avatar_url=user.avatar_url,
     )
     crud.set_user_active(db, updated_user, payload.is_active)
     return {"status": "ok"}

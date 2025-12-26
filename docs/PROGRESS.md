@@ -314,3 +314,25 @@
   - Phase 6 我的页面补齐（资料编辑 + 订阅标签管理）
 - 风险：
   - .doc 文档解析为兼容兜底，复杂格式可能解析不完整
+
+## Fix Phase 6
+- 状态：已完成
+- 完成内容：
+  - 新增账号信息编辑与订阅标签管理页面入口
+  - 后端支持用户资料更新、订阅标签获取与密码修改
+  - 用户模型补充邮箱/手机号/头像链接字段
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/mine/index.vue
+  - AIx2/pages/mine/profile.vue
+  - AIx2/pages/mine/subscriptions.vue
+  - AIx2/pages.json
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 全链路回归自测与文档补齐（如需）
+- 风险：
+  - 用户名冲突将返回 409，需要前端提示
