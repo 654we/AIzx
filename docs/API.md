@@ -107,6 +107,8 @@ Authorization: Bearer <token>
 ### GET /api/archive/weeks
 - 说明：获取归档可选周（需登录）
 - 备注：周定义为 Asia/Shanghai 时区下的周一~周日
+- 参数：
+  - last_n_weeks：返回最近 N 周（默认 8，范围 1~52）
 - Response:
 ```json
 { "weeks": ["2024-W40", "2024-W39"], "default": "2024-W40", "counts": { "2024-W40": 120 } }
@@ -116,6 +118,9 @@ Authorization: Bearer <token>
 - 说明：获取归档周资讯（需登录）
 - 说明：支持 week_start/week_end，分页返回，响应包含 stats.count
 - Response 同 /api/news（新增 stats 字段）
+ 
+### 归档错误码
+- ARCHIVE_DB_NOT_CONFIGURED：未配置归档数据库连接时返回
 
 ## 天气
 ### GET /api/weather?location=
@@ -131,7 +136,7 @@ Authorization: Bearer <token>
 
 ## 日程
 ### POST /api/schedule/upload
-- 说明：上传日程文件（txt/md/csv，<=2MB）
+- 说明：上传日程文件（doc/docx/xls/xlsx/csv/txt/md，<=2MB）
 - Header: Authorization Bearer token
 - FormData:
   - file: 文件

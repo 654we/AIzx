@@ -20,7 +20,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from starlette.middleware.sessions import SessionMiddleware
 from jose import JWTError, jwt
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, func, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import crud, models, schemas
@@ -29,7 +29,7 @@ from app.news_crawler import crawl_feeds, collect_feed_items
 from app.mcp_search import search_news_via_mcp, fetch_mcp_candidates
 from app.auth import create_access_token
 from app.config import settings
-from app.archive_utils import archive_lock, archive_tz, get_last_week_range
+from app.archive_utils import archive_lock, archive_tz, get_last_week_range, parse_published_date
 from app.database import init_archive_db, init_db
 from app.deps import get_db
 from app.mcp.registry import MCPPluginError, test_plugin
@@ -797,9 +797,8 @@ def run_archive_job(force_run: bool = False) -> dict:
         items = db.query(models.NewsItem).all()
         to_archive = []
         for item in items:
-            try:
-                published_date = datetime.fromisoformat(item.published_at).date()
-            except Exception:
+            published_date = parse_published_date(item.published_at)
+            if not published_date:
                 continue
             if start <= published_date <= end:
                 to_archive.append(item)
@@ -1031,17 +1030,18 @@ def archive_weeks(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
     try:
         last_n_weeks = min(max(last_n_weeks, 1), 52)
-        weeks = (
+        rows = (
             archive_session.query(
                 models.ArchiveNewsItem.archive_week,
-                models.ArchiveNewsItem.id,
+                func.count(models.ArchiveNewsItem.id),
             )
+            .group_by(models.ArchiveNewsItem.archive_week)
+            .order_by(models.ArchiveNewsItem.archive_week.desc())
+            .limit(last_n_weeks)
             .all()
         )
-        week_counts = {}
-        for week, _ in weeks:
-            week_counts[week] = week_counts.get(week, 0) + 1
-        sorted_weeks = sorted(week_counts.keys(), reverse=True)[:last_n_weeks]
+        week_counts = {week: count for week, count in rows}
+        sorted_weeks = [week for week, _ in rows]
     finally:
         archive_session.close()
     return {
