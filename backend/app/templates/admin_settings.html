@@ -41,6 +41,19 @@
       <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />
       <label>资讯抓取 Cron（五段式，优先于间隔）</label>
       <input type="text" name="news_crawler_cron" value="{{ settings.news_crawler_cron }}" />
+      <label>资讯抓取时间（统一时间选择）</label>
+      <input type="time" name="news_run_time" value="{{ settings.news_run_time }}" />
+      <label>资讯抓取周期</label>
+      <select name="news_run_weekday">
+        <option value="daily" {% if settings.news_run_weekday == 'daily' %}selected{% endif %}>每天</option>
+        <option value="1" {% if settings.news_run_weekday == '1' %}selected{% endif %}>周一</option>
+        <option value="2" {% if settings.news_run_weekday == '2' %}selected{% endif %}>周二</option>
+        <option value="3" {% if settings.news_run_weekday == '3' %}selected{% endif %}>周三</option>
+        <option value="4" {% if settings.news_run_weekday == '4' %}selected{% endif %}>周四</option>
+        <option value="5" {% if settings.news_run_weekday == '5' %}selected{% endif %}>周五</option>
+        <option value="6" {% if settings.news_run_weekday == '6' %}selected{% endif %}>周六</option>
+        <option value="7" {% if settings.news_run_weekday == '7' %}selected{% endif %}>周日</option>
+      </select>
       <label>资讯抓取间隔（分钟）</label>
       <input type="text" name="news_crawler_interval_minutes" value="{{ settings.news_crawler_interval_minutes }}" />
       <label>资讯抓取条数上限</label>
@@ -102,6 +115,18 @@
       <input type="text" name="archive_enabled" value="{{ settings.archive_enabled }}" />
       <label>归档 cron（默认每周一凌晨）</label>
       <input type="text" name="archive_cron" value="{{ settings.archive_cron }}" />
+      <label>归档时间（统一时间选择）</label>
+      <input type="time" name="archive_run_time" value="{{ settings.archive_run_time }}" />
+      <label>归档周期</label>
+      <select name="archive_run_weekday">
+        <option value="1" {% if settings.archive_run_weekday == '1' %}selected{% endif %}>周一</option>
+        <option value="2" {% if settings.archive_run_weekday == '2' %}selected{% endif %}>周二</option>
+        <option value="3" {% if settings.archive_run_weekday == '3' %}selected{% endif %}>周三</option>
+        <option value="4" {% if settings.archive_run_weekday == '4' %}selected{% endif %}>周四</option>
+        <option value="5" {% if settings.archive_run_weekday == '5' %}selected{% endif %}>周五</option>
+        <option value="6" {% if settings.archive_run_weekday == '6' %}selected{% endif %}>周六</option>
+        <option value="7" {% if settings.archive_run_weekday == '7' %}selected{% endif %}>周日</option>
+      </select>
       <button type="submit">保存设置</button>
     </form>
   </div>

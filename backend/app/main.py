@@ -189,6 +189,25 @@ def configure_news_scheduler(db: Session) -> dict:
     }
 
 
+def parse_weekly_cron(cron_expr: str) -> tuple[str, str]:
+    parts = cron_expr.split()
+    if len(parts) != 5:
+        return "", ""
+    minute, hour, _, _, weekday = parts
+    if weekday == "*":
+        return f"{hour.zfill(2)}:{minute.zfill(2)}", "daily"
+    return f"{hour.zfill(2)}:{minute.zfill(2)}", weekday
+
+
+def build_weekly_cron(time_value: str, weekday: str) -> str:
+    if not time_value:
+        return ""
+    hour, minute = time_value.split(":")
+    if weekday == "daily":
+        return f"{minute} {hour} * * *"
+    return f"{minute} {hour} * * {weekday}"
+
+
 @app.on_event("startup")
 def startup_event() -> None:
     init_db()
@@ -1343,6 +1362,12 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "archive_enabled": setting_value("archive_enabled", "false"),
         "archive_cron": setting_value("archive_cron", "0 2 * * 1"),
     }
+    news_time, news_weekday = parse_weekly_cron(settings_map["news_crawler_cron"])
+    archive_time, archive_weekday = parse_weekly_cron(settings_map["archive_cron"])
+    settings_map["news_run_time"] = news_time
+    settings_map["news_run_weekday"] = news_weekday
+    settings_map["archive_run_time"] = archive_time
+    settings_map["archive_run_weekday"] = archive_weekday
     return templates.TemplateResponse(
         "admin_settings.html",
         {"request": request, "settings": settings_map},
@@ -1363,6 +1388,8 @@ def admin_settings_post(
     news_target_count: str = Form("20"),
     news_dedupe_max_rounds: str = Form("5"),
     news_dedupe_max_candidates: str = Form("200"),
+    news_run_time: str = Form(""),
+    news_run_weekday: str = Form(""),
     news_source_rss: str = Form("true"),
     news_source_mcp: str = Form("false"),
     news_source_feeds: str = Form("true"),
@@ -1387,6 +1414,8 @@ def admin_settings_post(
     archive_database_url: str = Form(""),
     archive_enabled: str = Form("false"),
     archive_cron: str = Form("0 2 * * 1"),
+    archive_run_time: str = Form(""),
+    archive_run_weekday: str = Form(""),
     db: Session = Depends(get_db),
 ):
     redirect = require_admin(request)
@@ -1403,6 +1432,10 @@ def admin_settings_post(
     crud.upsert_setting(db, "news_target_count", news_target_count)
     crud.upsert_setting(db, "news_dedupe_max_rounds", news_dedupe_max_rounds)
     crud.upsert_setting(db, "news_dedupe_max_candidates", news_dedupe_max_candidates)
+    if news_run_time:
+        crud.upsert_setting(db, "news_crawler_cron", build_weekly_cron(news_run_time, news_run_weekday or "daily"))
+    else:
+        crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
     crud.upsert_setting(db, "news_source_rss", news_source_rss)
     crud.upsert_setting(db, "news_source_mcp", news_source_mcp)
     crud.upsert_setting(db, "news_source_feeds", news_source_feeds)
@@ -1427,7 +1460,10 @@ def admin_settings_post(
     if archive_database_url:
         crud.upsert_setting(db, "archive_database_url", archive_database_url)
     crud.upsert_setting(db, "archive_enabled", archive_enabled)
-    crud.upsert_setting(db, "archive_cron", archive_cron)
+    if archive_run_time:
+        crud.upsert_setting(db, "archive_cron", build_weekly_cron(archive_run_time, archive_run_weekday or "1"))
+    else:
+        crud.upsert_setting(db, "archive_cron", archive_cron)
     configure_news_scheduler(db)
     configure_archive_scheduler(db)
     return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
@@ -1540,6 +1576,9 @@ def admin_scheduler(request: Request, db: Session = Depends(get_db)):
         "next_run_at": scheduler_info.get("next_run_at", ""),
         "scheduler_error": scheduler_info.get("error", ""),
     }
+    news_time, news_weekday = parse_weekly_cron(settings_map["news_crawler_cron"])
+    settings_map["news_run_time"] = news_time
+    settings_map["news_run_weekday"] = news_weekday
     return templates.TemplateResponse(
         "admin_scheduler.html",
         {"request": request, "settings": settings_map},
@@ -1556,6 +1595,8 @@ def admin_scheduler_post(
     news_source_rss: str = Form("true"),
     news_source_mcp: str = Form("false"),
     news_source_feeds: str = Form("true"),
+    news_run_time: str = Form(""),
+    news_run_weekday: str = Form(""),
     db: Session = Depends(get_db),
 ):
     redirect = require_admin(request)
@@ -1565,6 +1606,10 @@ def admin_scheduler_post(
     crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
     crud.upsert_setting(db, "news_crawler_interval_minutes", news_crawler_interval_minutes)
     crud.upsert_setting(db, "news_crawler_limit", news_crawler_limit)
+    if news_run_time:
+        crud.upsert_setting(db, "news_crawler_cron", build_weekly_cron(news_run_time, news_run_weekday or "daily"))
+    else:
+        crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
     crud.upsert_setting(db, "news_source_rss", news_source_rss)
     crud.upsert_setting(db, "news_source_mcp", news_source_mcp)
     crud.upsert_setting(db, "news_source_feeds", news_source_feeds)

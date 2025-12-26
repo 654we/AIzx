@@ -417,3 +417,18 @@
   - Phase B 归档查询 UI 优化（周折叠/周选择/加载更多/空态）
 - 风险：
   - 归档库未配置时查询将返回 ARCHIVE_DB_NOT_CONFIGURED
+
+## Fix Phase B
+- 状态：已完成
+- 完成内容：
+  - 管理后台时间配置改为统一时间选择（新闻抓取/归档）
+  - 选择器自动转换为 cron 表达式并保留高级 cron 输入
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_scheduler.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 继续回归测试 UI 表单保存逻辑
+- 风险：
+  - 同时填写 cron 与时间选择器时以时间选择器为准
