@@ -2039,12 +2039,25 @@ def admin_api_mcp_local_test(local_id: int, request: Request, db: Session = Depe
             args = [local.command] + json.loads(local.args_json or "[]")
             env = os.environ.copy()
             env.update(json.loads(local.env_json or "{}"))
-            subprocess.run(args, capture_output=True, check=True, timeout=10, env=env)
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                check=True,
+                timeout=local.timeout_sec or 10,
+                env=env,
+                text=True,
+            )
+            stderr = (result.stderr or "").strip()
+            if stderr:
+                error_message = stderr[:200]
         else:
             test_plugin(local.module_path)
     except MCPPluginError as exc:
         status_text = "failed"
         error_message = str(exc)
+    except subprocess.TimeoutExpired:
+        status_text = "failed"
+        error_message = "命令执行超时"
     except (json.JSONDecodeError, subprocess.SubprocessError, FileNotFoundError) as exc:
         status_text = "failed"
         error_message = str(exc)

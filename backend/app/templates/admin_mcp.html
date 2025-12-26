@@ -142,13 +142,20 @@
 
   <script>
     function rowData(row) {
+      let extra = {};
+      try {
+        extra = JSON.parse(row.querySelector('.extra_config')?.value || '{}');
+      } catch (err) {
+        alert('远程 MCP 额外配置 JSON 格式错误');
+        throw err;
+      }
       return {
         name: row.querySelector('.name').value,
         base_url: row.querySelector('.base_url')?.value,
         protocol: row.querySelector('.protocol')?.value || 'http',
         auth_type: row.querySelector('.auth_type')?.value,
         auth_value: row.querySelector('.auth_value')?.value,
-        extra_config: JSON.parse(row.querySelector('.extra_config')?.value || '{}'),
+        extra_config: extra,
         timeout_sec: Number(row.querySelector('.timeout_sec').value || 10),
         enabled: row.querySelector('.enabled').value === 'true',
         priority: Number(row.querySelector('.priority').value || 1)
@@ -156,6 +163,13 @@
     }
 
     async function createRemote() {
+      let extraConfig = {};
+      try {
+        extraConfig = JSON.parse(remoteExtra.value || '{}');
+      } catch (err) {
+        alert('远程 MCP 额外配置 JSON 格式错误');
+        return;
+      }
       await fetch('/admin/api/mcp/remotes', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -165,7 +179,7 @@
           protocol: remoteProtocol.value,
           auth_type: remoteAuthType.value,
           auth_value: remoteAuthValue.value,
-          extra_config: JSON.parse(remoteExtra.value || '{}'),
+          extra_config: extraConfig,
           timeout_sec: Number(remoteTimeout.value || 10),
           enabled: remoteEnabled.value === 'true',
           priority: Number(remotePriority.value || 1)
@@ -176,11 +190,15 @@
 
     async function updateRemote(id) {
       const row = document.querySelector(`tr.remote-row[data-id='${id}']`);
-      await fetch(`/admin/api/mcp/remotes/${id}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(rowData(row))
-      });
+      try {
+        await fetch(`/admin/api/mcp/remotes/${id}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(rowData(row))
+        });
+      } catch (err) {
+        return;
+      }
       location.reload();
     }
 
@@ -195,6 +213,15 @@
     }
 
     async function createLocal() {
+      let args = [];
+      let env = {};
+      try {
+        args = JSON.parse(localArgs.value || '[]');
+        env = JSON.parse(localEnv.value || '{}');
+      } catch (err) {
+        alert('本地 MCP 参数或环境变量 JSON 格式错误');
+        return;
+      }
       await fetch('/admin/api/mcp/locals', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -202,8 +229,8 @@
           name: localName.value,
           module_path: localModule.value,
           command: localCommand.value,
-          args: JSON.parse(localArgs.value || '[]'),
-          env: JSON.parse(localEnv.value || '{}'),
+          args: args,
+          env: env,
           capabilities: JSON.parse(localCapabilities.value || '[]'),
           schema: JSON.parse(localSchema.value || '{}'),
           timeout_sec: Number(localTimeout.value || 10),
@@ -216,6 +243,15 @@
 
     async function updateLocal(id) {
       const row = document.querySelector(`tr.local-row[data-id='${id}']`);
+      let args = [];
+      let env = {};
+      try {
+        args = JSON.parse(row.querySelector('.args').value || '[]');
+        env = JSON.parse(row.querySelector('.env').value || '{}');
+      } catch (err) {
+        alert('本地 MCP 参数或环境变量 JSON 格式错误');
+        return;
+      }
       await fetch(`/admin/api/mcp/locals/${id}`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
@@ -223,8 +259,8 @@
           name: row.querySelector('.name').value,
           module_path: row.querySelector('.module_path').value,
           command: row.querySelector('.command').value,
-          args: JSON.parse(row.querySelector('.args').value || '[]'),
-          env: JSON.parse(row.querySelector('.env').value || '{}'),
+          args: args,
+          env: env,
           capabilities: JSON.parse(row.querySelector('.capabilities').value || '[]'),
           schema: JSON.parse(row.querySelector('.schema').value || '{}'),
           timeout_sec: Number(row.querySelector('.timeout_sec').value || 10),

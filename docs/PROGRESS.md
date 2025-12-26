@@ -451,3 +451,17 @@
   - 依据第三方 MCP 文档填写 payload_template 解决 400
 - 风险：
   - extra_config JSON 格式错误会导致请求使用默认 payload
+
+## Fix Phase D
+- 状态：已完成
+- 完成内容：
+  - MCP 管理后台 JSON 校验增强，避免错误配置导致保存异常
+  - 本地 MCP 命令执行测试增加超时与 stderr 摘要
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_mcp.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 根据第三方 MCP CLI 输出规范补充解析适配（如需）
+- 风险：
+  - 命令执行依赖系统环境与 npx 可用性
