@@ -267,7 +267,7 @@ Authorization: Bearer <token>
 ### PUT /admin/api/mcp/locals/{id}
 ### DELETE /admin/api/mcp/locals/{id}
 - Schema:\n```json
-{ "name": "", "module_path": "app.mcp.providers.demo", "capabilities": ["search"], "schema": {}, "timeout_sec": 10, "enabled": true, "priority": 1 }
+{ "name": "", "module_path": "app.mcp.providers.demo", "command": "cmd", "args": ["/c", "npx", "bing-cn-mcp"], "env": {"USER_AGENT": ""}, "capabilities": ["search"], "schema": {}, "timeout_sec": 10, "enabled": true, "priority": 1 }
 ```
 
 ### POST /admin/api/mcp/locals/{id}/test

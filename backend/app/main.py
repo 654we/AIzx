@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -1952,6 +1953,9 @@ def admin_api_mcp_locals(request: Request, db: Session = Depends(get_db)):
             "id": local.id,
             "name": local.name,
             "module_path": local.module_path,
+            "command": local.command,
+            "args": json.loads(local.args_json or "[]"),
+            "env": json.loads(local.env_json or "{}"),
             "capabilities": json.loads(local.capabilities or "[]"),
             "schema": json.loads(local.schema or "{}"),
             "timeout_sec": local.timeout_sec,
@@ -1971,6 +1975,9 @@ def admin_api_mcp_local_create(
         db,
         name=payload.name,
         module_path=payload.module_path,
+        command=payload.command,
+        args_json=json.dumps(payload.args, ensure_ascii=False),
+        env_json=json.dumps(payload.env, ensure_ascii=False),
         capabilities=json.dumps(payload.capabilities, ensure_ascii=False),
         schema=json.dumps(payload.schema, ensure_ascii=False),
         timeout_sec=payload.timeout_sec,
@@ -1996,6 +2003,9 @@ def admin_api_mcp_local_update(
         local,
         name=payload.name,
         module_path=payload.module_path,
+        command=payload.command,
+        args_json=json.dumps(payload.args, ensure_ascii=False),
+        env_json=json.dumps(payload.env, ensure_ascii=False),
         capabilities=json.dumps(payload.capabilities, ensure_ascii=False),
         schema=json.dumps(payload.schema, ensure_ascii=False),
         timeout_sec=payload.timeout_sec,
@@ -2025,8 +2035,17 @@ def admin_api_mcp_local_test(local_id: int, request: Request, db: Session = Depe
     error_message = ""
     status_text = "success"
     try:
-        test_plugin(local.module_path)
+        if local.command:
+            args = [local.command] + json.loads(local.args_json or "[]")
+            env = os.environ.copy()
+            env.update(json.loads(local.env_json or "{}"))
+            subprocess.run(args, capture_output=True, check=True, timeout=10, env=env)
+        else:
+            test_plugin(local.module_path)
     except MCPPluginError as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    except (json.JSONDecodeError, subprocess.SubprocessError, FileNotFoundError) as exc:
         status_text = "failed"
         error_message = str(exc)
     duration_ms = int((time.time() - start) * 1000)

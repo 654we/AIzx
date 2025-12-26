@@ -435,6 +435,9 @@ def create_mcp_local(
     db: Session,
     name: str,
     module_path: str,
+    command: str,
+    args_json: str,
+    env_json: str,
     capabilities: str,
     schema: str,
     timeout_sec: int,
@@ -444,6 +447,9 @@ def create_mcp_local(
     local = models.MCPLocalPlugin(
         name=name,
         module_path=module_path,
+        command=command,
+        args_json=args_json,
+        env_json=env_json,
         capabilities=capabilities,
         schema=schema,
         timeout_sec=timeout_sec,
@@ -469,6 +475,9 @@ def update_mcp_local(
     local: models.MCPLocalPlugin,
     name: str,
     module_path: str,
+    command: str,
+    args_json: str,
+    env_json: str,
     capabilities: str,
     schema: str,
     timeout_sec: int,
@@ -477,6 +486,9 @@ def update_mcp_local(
 ) -> models.MCPLocalPlugin:
     local.name = name
     local.module_path = module_path
+    local.command = command
+    local.args_json = args_json
+    local.env_json = env_json
     local.capabilities = capabilities
     local.schema = schema
     local.timeout_sec = timeout_sec

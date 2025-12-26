@@ -165,6 +165,9 @@ class MCPLocalPluginPayload(BaseModel):
     module_path: str
     capabilities: list[str]
     schema: dict
+    command: str = ""
+    args: list[str] = []
+    env: dict = {}
     timeout_sec: int = 10
     enabled: bool = True
     priority: int = 1

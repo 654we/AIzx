@@ -90,6 +90,9 @@
           <tr>
             <th>名称</th>
             <th>模块路径</th>
+            <th>命令</th>
+            <th>参数(JSON)</th>
+            <th>环境变量(JSON)</th>
             <th>能力(JSON)</th>
             <th>Schema(JSON)</th>
             <th>超时</th>
@@ -103,6 +106,9 @@
           <tr data-id="{{ local.id }}" class="local-row">
             <td><input value="{{ local.name }}" class="name" /></td>
             <td><input value="{{ local.module_path }}" class="module_path" /></td>
+            <td><input value="{{ local.command }}" class="command" /></td>
+            <td><input value="{{ local.args }}" class="args" /></td>
+            <td><input value="{{ local.env }}" class="env" /></td>
             <td><input value="{{ local.capabilities }}" class="capabilities" /></td>
             <td><input value="{{ local.schema }}" class="schema" /></td>
             <td><input value="{{ local.timeout_sec }}" class="timeout_sec" /></td>
@@ -121,6 +127,9 @@
       <div>
         <input id="localName" placeholder="名称" />
         <input id="localModule" placeholder="模块路径 app.mcp.providers.demo" />
+        <input id="localCommand" placeholder="命令，如 cmd 或 npx" />
+        <input id="localArgs" placeholder='["/c","npx","bing-cn-mcp"]' />
+        <input id="localEnv" placeholder='{"USER_AGENT": "..."}' />
         <input id="localCapabilities" placeholder='["search"]' />
         <input id="localSchema" placeholder='{"query": "string"}' />
         <input id="localTimeout" placeholder="timeout_sec" value="10" />
@@ -192,6 +201,9 @@
         body: JSON.stringify({
           name: localName.value,
           module_path: localModule.value,
+          command: localCommand.value,
+          args: JSON.parse(localArgs.value || '[]'),
+          env: JSON.parse(localEnv.value || '{}'),
           capabilities: JSON.parse(localCapabilities.value || '[]'),
           schema: JSON.parse(localSchema.value || '{}'),
           timeout_sec: Number(localTimeout.value || 10),
@@ -210,6 +222,9 @@
         body: JSON.stringify({
           name: row.querySelector('.name').value,
           module_path: row.querySelector('.module_path').value,
+          command: row.querySelector('.command').value,
+          args: JSON.parse(row.querySelector('.args').value || '[]'),
+          env: JSON.parse(row.querySelector('.env').value || '{}'),
           capabilities: JSON.parse(row.querySelector('.capabilities').value || '[]'),
           schema: JSON.parse(row.querySelector('.schema').value || '{}'),
           timeout_sec: Number(row.querySelector('.timeout_sec').value || 10),
