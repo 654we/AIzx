@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, Integer, String, UniqueConstraint
 from sqlalchemy import Text
 
 from app.database import Base, ArchiveBase
@@ -137,6 +137,7 @@ class MCPLocalPlugin(Base):
 
 class ArchiveNewsItem(ArchiveBase):
     __tablename__ = "archive_news_items"
+    __table_args__ = (UniqueConstraint("url", "archive_week", name="uniq_url_week"),)
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(256), nullable=False)

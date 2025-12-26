@@ -106,14 +106,16 @@ Authorization: Bearer <token>
 
 ### GET /api/archive/weeks
 - 说明：获取归档可选周（需登录）
+- 备注：周定义为 Asia/Shanghai 时区下的周一~周日
 - Response:
 ```json
-{ "weeks": ["2024-W40", "2024-W39"], "default": "2024-W40" }
+{ "weeks": ["2024-W40", "2024-W39"], "default": "2024-W40", "counts": { "2024-W40": 120 } }
 ```
 
-### GET /api/archive/news?week=&page=&page_size=
+### GET /api/archive/news?week=&week_start=&week_end=&page=&page_size=
 - 说明：获取归档周资讯（需登录）
-- Response 同 /api/news
+- 说明：支持 week_start/week_end，分页返回，响应包含 stats.count
+- Response 同 /api/news（新增 stats 字段）
 
 ## 天气
 ### GET /api/weather?location=

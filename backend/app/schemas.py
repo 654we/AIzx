@@ -90,6 +90,7 @@ class NewsResponse(BaseModel):
     page: int
     page_size: int
     has_more: bool
+    stats: dict | None = None
 
 
 class NewsPreviewResponse(BaseModel):

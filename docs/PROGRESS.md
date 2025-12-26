@@ -394,3 +394,26 @@
   - 验证归档 MySQL 连接与周归档数据完整性
 - 风险：
   - 归档库未配置时归档/查询将返回 ARCHIVE_DB_NOT_CONFIGURED
+
+## Fix Phase A
+- 状态：已完成
+- 完成内容：
+  - 归档任务幂等（archive_week + url 唯一约束）
+  - 归档任务并发安全（全局锁避免手动与定时冲突）
+  - 归档周定义（Asia/Shanghai、周一为起始）
+  - 归档查询接口增强（week_start/week_end、stats.count、last_n_weeks）
+  - 增加 smoke.ps1 与最小 pytest 用例
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/main.py
+  - backend/app/database.py
+  - backend/requirements.txt
+  - backend/tests/test_archive_utils.py
+  - scripts/smoke.ps1
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase B 归档查询 UI 优化（周折叠/周选择/加载更多/空态）
+- 风险：
+  - 归档库未配置时查询将返回 ARCHIVE_DB_NOT_CONFIGURED

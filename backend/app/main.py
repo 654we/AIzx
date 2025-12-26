@@ -29,6 +29,7 @@ from app.news_crawler import crawl_feeds, collect_feed_items
 from app.mcp_search import search_news_via_mcp, fetch_mcp_candidates
 from app.auth import create_access_token
 from app.config import settings
+from app.archive_utils import archive_lock, archive_tz, get_last_week_range
 from app.database import init_archive_db, init_db
 from app.deps import get_db
 from app.mcp.registry import MCPPluginError, test_plugin
@@ -774,16 +775,9 @@ def run_news_crawler(limit: int | None = None, force_run: bool = False) -> dict:
     return {"created": created, "sources": used_sources}
 
 
-def get_last_week_range() -> tuple[datetime.date, datetime.date, str]:
-    today = datetime.now().date()
-    last_week = today - timedelta(days=7)
-    start = last_week - timedelta(days=last_week.weekday())
-    end = start + timedelta(days=6)
-    week_key = f"{start.isocalendar().year}-W{start.isocalendar().week:02d}"
-    return start, end, week_key
-
-
 def run_archive_job(force_run: bool = False) -> dict:
+    if not archive_lock.acquire(blocking=False):
+        return {"archived": 0, "deleted": 0, "status": "running"}
     db = next(get_db())
     archive_session = None
     start_time = time.time()
@@ -795,7 +789,7 @@ def run_archive_job(force_run: bool = False) -> dict:
     try:
         enabled = _setting_bool(db, "archive_enabled", "false")
         if not enabled and not force_run:
-            return {"archived": 0, "deleted": 0}
+            return {"archived": 0, "deleted": 0, "status": "disabled"}
         archive_session = get_archive_session(db)
         if not archive_session:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
@@ -845,6 +839,7 @@ def run_archive_job(force_run: bool = False) -> dict:
         if archive_session:
             archive_session.close()
         db.close()
+        archive_lock.release()
     duration_ms = int((time.time() - start_time) * 1000)
     task_db = next(get_db())
     try:
@@ -1026,27 +1021,41 @@ def news_preview_by_url(payload: dict = Body(default={}), db: Session = Depends(
 
 
 @app.get("/api/archive/weeks")
-def archive_weeks(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def archive_weeks(
+    last_n_weeks: int = 8,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     archive_session = get_archive_session(db)
     if not archive_session:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
     try:
+        last_n_weeks = min(max(last_n_weeks, 1), 52)
         weeks = (
-            archive_session.query(models.ArchiveNewsItem.archive_week)
-            .distinct()
-            .order_by(models.ArchiveNewsItem.archive_week.desc())
-            .limit(12)
+            archive_session.query(
+                models.ArchiveNewsItem.archive_week,
+                models.ArchiveNewsItem.id,
+            )
             .all()
         )
-        week_list = [week[0] for week in weeks]
+        week_counts = {}
+        for week, _ in weeks:
+            week_counts[week] = week_counts.get(week, 0) + 1
+        sorted_weeks = sorted(week_counts.keys(), reverse=True)[:last_n_weeks]
     finally:
         archive_session.close()
-    return {"weeks": week_list, "default": week_list[0] if week_list else ""}
+    return {
+        "weeks": sorted_weeks,
+        "default": sorted_weeks[0] if sorted_weeks else "",
+        "counts": {week: week_counts[week] for week in sorted_weeks},
+    }
 
 
 @app.get("/api/archive/news", response_model=schemas.NewsResponse)
 def archive_news(
-    week: str,
+    week: str | None = None,
+    week_start: str | None = None,
+    week_end: str | None = None,
     page: int = 1,
     page_size: int = 10,
     current_user=Depends(get_current_user),
@@ -1057,7 +1066,13 @@ def archive_news(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
     page = max(page, 1)
     page_size = min(max(page_size, 1), 50)
-    query = archive_session.query(models.ArchiveNewsItem).filter(models.ArchiveNewsItem.archive_week == week)
+    query = archive_session.query(models.ArchiveNewsItem)
+    if week:
+        query = query.filter(models.ArchiveNewsItem.archive_week == week)
+    if week_start:
+        query = query.filter(models.ArchiveNewsItem.published_at >= week_start)
+    if week_end:
+        query = query.filter(models.ArchiveNewsItem.published_at <= week_end)
     total = query.count()
     items = (
         query.order_by(models.ArchiveNewsItem.published_at.desc())
@@ -1078,11 +1093,13 @@ def archive_news(
         for item in items
     ]
     archive_session.close()
+    stats = {"count": total}
     return schemas.NewsResponse(
         items=mapped,
         page=page,
         page_size=page_size,
         has_more=page * page_size < total,
+        stats=stats,
     )
 
 
