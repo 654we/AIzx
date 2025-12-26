@@ -52,6 +52,11 @@
       <button onclick="triggerTask('/admin/api/tasks/schedule_analyze', {user_id: Number(scheduleUserId.value || 0)})">立即执行</button>
       <div id="scheduleResult" class="result"></div>
     </div>
+    <div class="card">
+      <h3>立即执行周归档</h3>
+      <button onclick="triggerTask('/admin/api/archive/run', {})">立即执行</button>
+      <div id="archiveResult" class="result"></div>
+    </div>
 
     <h3>最近执行记录</h3>
     <table>
@@ -83,7 +88,8 @@
   <script>
     async function triggerTask(url, payload) {
       const resultId = url.includes('news_crawl') ? 'newsResult'
-        : url.includes('weather_refresh') ? 'weatherResult' : 'scheduleResult';
+        : url.includes('weather_refresh') ? 'weatherResult'
+        : url.includes('archive') ? 'archiveResult' : 'scheduleResult';
       const target = document.getElementById(resultId);
       target.textContent = '执行中...';
       const response = await fetch(url, {

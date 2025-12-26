@@ -1,10 +1,12 @@
 import csv
+import hashlib
 import html
 import io
 import json
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timedelta
 
 import httpx
@@ -18,15 +20,16 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from starlette.middleware.sessions import SessionMiddleware
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from app import crud, models, schemas
 from app.ai_router import build_provider, get_route, provider_ready
-from app.news_crawler import crawl_feeds
-from app.mcp_search import search_news_via_mcp
+from app.news_crawler import crawl_feeds, collect_feed_items
+from app.mcp_search import search_news_via_mcp, fetch_mcp_candidates
 from app.auth import create_access_token
 from app.config import settings
-from app.database import init_db
+from app.database import init_archive_db, init_db
 from app.deps import get_db
 from app.mcp.registry import MCPPluginError, test_plugin
 
@@ -39,6 +42,9 @@ app.add_middleware(SessionMiddleware, secret_key=settings.admin_session_secret)
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 scheduler = BackgroundScheduler()
 security = HTTPBearer()
+archive_engine_cache = None
+archive_session_cache = None
+archive_url_cache = ""
 
 
 def _setting_value(db: Session, key: str, default: str) -> str:
@@ -53,6 +59,63 @@ def _setting_bool(db: Session, key: str, default: str = "false") -> bool:
 def _ensure_setting(db: Session, key: str, default: str) -> None:
     if not crud.get_setting(db, key):
         crud.upsert_setting(db, key, default)
+
+
+def _setting_optional(db: Session, key: str) -> str:
+    item = crud.get_setting(db, key)
+    return item.value if item else ""
+
+
+def get_archive_db_url(db: Session) -> str:
+    return _setting_optional(db, "archive_database_url") or settings.archive_database_url
+
+
+def get_archive_session(db: Session) -> Session | None:
+    global archive_engine_cache, archive_session_cache, archive_url_cache
+    url = get_archive_db_url(db)
+    if not url:
+        return None
+    if archive_url_cache != url:
+        archive_engine_cache = create_engine(url, pool_pre_ping=True)
+        archive_session_cache = sessionmaker(autocommit=False, autoflush=False, bind=archive_engine_cache)
+        archive_url_cache = url
+    return archive_session_cache()
+
+
+def mask_database_url(url: str) -> str:
+    if "://" not in url:
+        return url
+    prefix, rest = url.split("://", 1)
+    if "@" not in rest:
+        return url
+    creds, host = rest.split("@", 1)
+    if ":" in creds:
+        user, _ = creds.split(":", 1)
+        return f"{prefix}://{user}:******@{host}"
+    return f"{prefix}://******@{host}"
+
+
+def configure_archive_scheduler(db: Session) -> dict:
+    _ensure_setting(db, "archive_enabled", "false")
+    _ensure_setting(db, "archive_cron", "0 2 * * 1")
+    cron_expr = _setting_value(db, "archive_cron", "0 2 * * 1")
+    if scheduler.get_job("archive_job"):
+        scheduler.remove_job("archive_job")
+    scheduler_error = ""
+    if _setting_bool(db, "archive_enabled", "false"):
+        try:
+            scheduler.add_job(
+                run_archive_job,
+                CronTrigger.from_crontab(cron_expr),
+                id="archive_job",
+                replace_existing=True,
+            )
+        except ValueError as exc:
+            scheduler_error = f"归档 cron 无效: {exc}"
+    if not scheduler.running:
+        scheduler.start(paused=False)
+    job = scheduler.get_job("archive_job")
+    return {"next_run_at": job.next_run_time.isoformat() if job else "", "error": scheduler_error}
 
 
 def ensure_default_weather_providers(db: Session) -> None:
@@ -87,6 +150,9 @@ def configure_news_scheduler(db: Session) -> dict:
     _ensure_setting(db, "news_crawler_cron", "")
     _ensure_setting(db, "news_crawler_interval_minutes", "30")
     _ensure_setting(db, "news_crawler_limit", "20")
+    _ensure_setting(db, "news_target_count", "20")
+    _ensure_setting(db, "news_dedupe_max_rounds", "5")
+    _ensure_setting(db, "news_dedupe_max_candidates", "200")
     _ensure_setting(db, "news_source_rss", "true")
     _ensure_setting(db, "news_source_mcp", "false")
     _ensure_setting(db, "news_source_feeds", "true")
@@ -147,6 +213,8 @@ def startup_event() -> None:
     db = next(get_db())
     try:
         configure_news_scheduler(db)
+        init_archive_db()
+        configure_archive_scheduler(db)
     finally:
         db.close()
 
@@ -530,6 +598,58 @@ def news_keypoints_from_ai(db: Session, title: str, content: str) -> list[str]:
         return fallback[:3] if fallback else ["暂无要点"]
 
 
+def normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.lower().strip())
+
+
+def compute_content_hash(title: str, summary: str, url: str) -> str:
+    base = normalize_text(title) + "|" + normalize_text(summary) + "|" + normalize_text(url)
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def choose_best_candidate(db: Session, candidates: list[dict]) -> tuple[dict, str]:
+    if len(candidates) == 1:
+        return candidates[0], "唯一候选"
+    route = get_route(db, "ai_route_news", "deepseek")
+    if not provider_ready(db, route):
+        candidates_sorted = sorted(
+            candidates,
+            key=lambda item: (len(item.get("summary", "")), item.get("published_at", "")),
+            reverse=True,
+        )
+        return candidates_sorted[0], "摘要更完整且发布时间更晚"
+    provider = build_provider(route, db)
+    prompt_items = []
+    for idx, item in enumerate(candidates, start=1):
+        prompt_items.append(
+            f"{idx}. 标题：{item.get('title')}\n"
+            f"摘要：{item.get('summary')}\n"
+            f"来源：{item.get('source')}\n"
+            f"发布时间：{item.get('published_at')}\n"
+            f"链接：{item.get('url')}"
+        )
+    prompt = (
+        "你是资讯去重评审，请基于信息完整度、时效性、来源可信度、标题与正文一致性、结构清晰度，"
+        "从候选中选出最佳的一篇。只返回序号与一句理由，格式：\"序号|理由\"。\n"
+        + "\n\n".join(prompt_items)
+    )
+    try:
+        result = provider.generate(prompt).strip()
+        parts = result.split("|", 1)
+        index = int(parts[0].strip()) - 1
+        if 0 <= index < len(candidates):
+            reason = parts[1].strip() if len(parts) > 1 else "AI评估"
+            return candidates[index], reason
+    except Exception:
+        pass
+    candidates_sorted = sorted(
+        candidates,
+        key=lambda item: (len(item.get("summary", "")), item.get("published_at", "")),
+        reverse=True,
+    )
+    return candidates_sorted[0], "摘要更完整且发布时间更晚"
+
+
 def extract_text_from_html(raw_html: str) -> str:
     cleaned = re.sub(r"<script.*?>.*?</script>", " ", raw_html, flags=re.S | re.I)
     cleaned = re.sub(r"<style.*?>.*?</style>", " ", cleaned, flags=re.S | re.I)
@@ -589,21 +709,157 @@ def run_news_crawler(limit: int | None = None, force_run: bool = False) -> dict:
             "mcp": _setting_bool(db, "news_source_mcp", "false"),
             "feeds": _setting_bool(db, "news_source_feeds", "true"),
         }
-        if sources["mcp"]:
-            search_news_via_mcp(db, news_summary_from_ai)
-            used_sources.append("mcp")
+        target_count = int(_setting_value(db, "news_target_count", "20") or 20)
+        if limit is not None:
+            target_count = min(target_count, limit)
+        max_rounds = int(_setting_value(db, "news_dedupe_max_rounds", "5") or 5)
+        max_candidates = int(_setting_value(db, "news_dedupe_max_candidates", "200") or 200)
         feed_setting = crud.get_setting(db, "news_feed_urls")
-        if not feed_setting or not feed_setting.value:
-            return {"created": created, "sources": used_sources}
-        feeds = [item.strip() for item in feed_setting.value.split(",") if item.strip()]
-        if not feeds:
-            return {"created": created, "sources": used_sources}
-        created += crawl_feeds(db, feeds, lambda title, content: news_summary_from_ai(db, title, content), limit=limit)
-        if sources["rss"] or sources["feeds"]:
-            used_sources.append("rss")
+        feeds = [item.strip() for item in (feed_setting.value.split(",") if feed_setting and feed_setting.value else []) if item.strip()]
+        candidates: list[dict] = []
+        round_count = 0
+        while len(candidates) < max_candidates and round_count < max_rounds:
+            round_count += 1
+            round_limit = max_candidates - len(candidates)
+            if sources["mcp"]:
+                candidates.extend(fetch_mcp_candidates(db, min(10, round_limit)))
+                used_sources.append("mcp")
+            if feeds and (sources["rss"] or sources["feeds"]):
+                candidates.extend(collect_feed_items(feeds, limit=min(20, round_limit)))
+                used_sources.append("rss")
+            if len(candidates) >= max_candidates:
+                break
+        groups: list[list[dict]] = []
+        for item in candidates:
+            text = normalize_text(item.get("title", "") + " " + item.get("summary", ""))
+            matched = False
+            for group in groups:
+                base_text = normalize_text(group[0].get("title", "") + " " + group[0].get("summary", ""))
+                if base_text and (base_text == text or (len(base_text) > 20 and base_text in text) or (len(text) > 20 and text in base_text)):
+                    group.append(item)
+                    matched = True
+                    break
+            if not matched:
+                groups.append([item])
+        deduped = []
+        for group in groups:
+            best, reason = choose_best_candidate(db, group)
+            merged_urls = [item["url"] for item in group if item["url"] != best["url"]]
+            best["dedupe_keep_reason"] = reason
+            best["dedupe_merged_urls"] = json.dumps(merged_urls, ensure_ascii=False)
+            best["dedupe_group_id"] = str(uuid.uuid4())
+            deduped.append(best)
+        deduped = deduped[:target_count]
+        for item in deduped:
+            if crud.get_news_by_url(db, item["url"]):
+                continue
+            summary = item.get("summary") or news_summary_from_ai(db, item.get("title", ""), "")
+            content_hash = compute_content_hash(item.get("title", ""), summary, item.get("url", ""))
+            crud.create_news_item(
+                db,
+                title=item.get("title", "未命名资讯"),
+                summary=summary[:200],
+                source=item.get("source", "订阅源"),
+                url=item.get("url", ""),
+                published_at=item.get("published_at", datetime.now().isoformat()),
+                tags=item.get("tags", ["订阅"]),
+                content_hash=content_hash,
+                dedupe_group_id=item.get("dedupe_group_id", ""),
+                dedupe_keep_reason=item.get("dedupe_keep_reason", ""),
+                dedupe_merged_urls=item.get("dedupe_merged_urls", "[]"),
+            )
+            created += 1
     finally:
         db.close()
     return {"created": created, "sources": used_sources}
+
+
+def get_last_week_range() -> tuple[datetime.date, datetime.date, str]:
+    today = datetime.now().date()
+    last_week = today - timedelta(days=7)
+    start = last_week - timedelta(days=last_week.weekday())
+    end = start + timedelta(days=6)
+    week_key = f"{start.isocalendar().year}-W{start.isocalendar().week:02d}"
+    return start, end, week_key
+
+
+def run_archive_job(force_run: bool = False) -> dict:
+    db = next(get_db())
+    archive_session = None
+    start_time = time.time()
+    status_text = "success"
+    error_message = ""
+    archived_count = 0
+    deleted_count = 0
+    week_key = ""
+    try:
+        enabled = _setting_bool(db, "archive_enabled", "false")
+        if not enabled and not force_run:
+            return {"archived": 0, "deleted": 0}
+        archive_session = get_archive_session(db)
+        if not archive_session:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
+        start, end, week_key = get_last_week_range()
+        items = db.query(models.NewsItem).all()
+        to_archive = []
+        for item in items:
+            try:
+                published_date = datetime.fromisoformat(item.published_at).date()
+            except Exception:
+                continue
+            if start <= published_date <= end:
+                to_archive.append(item)
+        for item in to_archive:
+            exists = (
+                archive_session.query(models.ArchiveNewsItem)
+                .filter(models.ArchiveNewsItem.url == item.url, models.ArchiveNewsItem.archive_week == week_key)
+                .first()
+            )
+            if exists:
+                continue
+            archive_session.add(
+                models.ArchiveNewsItem(
+                    title=item.title,
+                    summary=item.summary,
+                    source=item.source,
+                    url=item.url,
+                    published_at=item.published_at,
+                    tags=item.tags,
+                    content_hash=item.content_hash,
+                    archive_week=week_key,
+                )
+            )
+            archived_count += 1
+        archive_session.commit()
+        for item in to_archive:
+            db.delete(item)
+            deleted_count += 1
+        db.commit()
+    except Exception as exc:
+        if archive_session:
+            archive_session.rollback()
+        db.rollback()
+        status_text = "failed"
+        error_message = str(exc)
+    finally:
+        if archive_session:
+            archive_session.close()
+        db.close()
+    duration_ms = int((time.time() - start_time) * 1000)
+    task_db = next(get_db())
+    try:
+        crud.create_task_run(
+            task_db,
+            task_type="archive_weekly",
+            status=status_text,
+            duration_ms=duration_ms,
+            error_message=error_message,
+            log_excerpt=json.dumps({"week": week_key, "archived": archived_count, "deleted": deleted_count}, ensure_ascii=False),
+            payload_json=json.dumps({"week": week_key}, ensure_ascii=False),
+        )
+    finally:
+        task_db.close()
+    return {"archived": archived_count, "deleted": deleted_count, "week": week_key, "status": status_text}
 
 
 def get_current_user(
@@ -766,6 +1022,67 @@ def news_preview_by_url(payload: dict = Body(default={}), db: Session = Depends(
         content_text=text,
         cache_ttl_sec=3600,
         news_id=None,
+    )
+
+
+@app.get("/api/archive/weeks")
+def archive_weeks(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    archive_session = get_archive_session(db)
+    if not archive_session:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
+    try:
+        weeks = (
+            archive_session.query(models.ArchiveNewsItem.archive_week)
+            .distinct()
+            .order_by(models.ArchiveNewsItem.archive_week.desc())
+            .limit(12)
+            .all()
+        )
+        week_list = [week[0] for week in weeks]
+    finally:
+        archive_session.close()
+    return {"weeks": week_list, "default": week_list[0] if week_list else ""}
+
+
+@app.get("/api/archive/news", response_model=schemas.NewsResponse)
+def archive_news(
+    week: str,
+    page: int = 1,
+    page_size: int = 10,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    archive_session = get_archive_session(db)
+    if not archive_session:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 50)
+    query = archive_session.query(models.ArchiveNewsItem).filter(models.ArchiveNewsItem.archive_week == week)
+    total = query.count()
+    items = (
+        query.order_by(models.ArchiveNewsItem.published_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    mapped = [
+        schemas.NewsItem(
+            id=item.id,
+            title=item.title,
+            summary=item.summary,
+            source=item.source,
+            url=item.url,
+            published_at=item.published_at,
+            tags=[tag for tag in item.tags.split(",") if tag],
+        )
+        for item in items
+    ]
+    archive_session.close()
+    return schemas.NewsResponse(
+        items=mapped,
+        page=page,
+        page_size=page_size,
+        has_more=page * page_size < total,
     )
 
 
@@ -981,6 +1298,9 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "news_crawler_cron": setting_value("news_crawler_cron", ""),
         "news_crawler_interval_minutes": setting_value("news_crawler_interval_minutes", "30"),
         "news_crawler_limit": setting_value("news_crawler_limit", "20"),
+        "news_target_count": setting_value("news_target_count", "20"),
+        "news_dedupe_max_rounds": setting_value("news_dedupe_max_rounds", "5"),
+        "news_dedupe_max_candidates": setting_value("news_dedupe_max_candidates", "200"),
         "news_source_rss": setting_value("news_source_rss", "true"),
         "news_source_mcp": setting_value("news_source_mcp", "false"),
         "news_source_feeds": setting_value("news_source_feeds", "true"),
@@ -1002,6 +1322,9 @@ def admin_settings(request: Request, db: Session = Depends(get_db)):
         "ai_route_news": setting_value("ai_route_news", "deepseek"),
         "ai_route_weather": setting_value("ai_route_weather", "openai"),
         "ai_route_schedule": setting_value("ai_route_schedule", "glm"),
+        "archive_database_url": mask_database_url(setting_value("archive_database_url", settings.archive_database_url)),
+        "archive_enabled": setting_value("archive_enabled", "false"),
+        "archive_cron": setting_value("archive_cron", "0 2 * * 1"),
     }
     return templates.TemplateResponse(
         "admin_settings.html",
@@ -1020,6 +1343,9 @@ def admin_settings_post(
     news_crawler_cron: str = Form(""),
     news_crawler_interval_minutes: str = Form("30"),
     news_crawler_limit: str = Form("20"),
+    news_target_count: str = Form("20"),
+    news_dedupe_max_rounds: str = Form("5"),
+    news_dedupe_max_candidates: str = Form("200"),
     news_source_rss: str = Form("true"),
     news_source_mcp: str = Form("false"),
     news_source_feeds: str = Form("true"),
@@ -1041,6 +1367,9 @@ def admin_settings_post(
     ai_route_news: str = Form("deepseek"),
     ai_route_weather: str = Form("openai"),
     ai_route_schedule: str = Form("glm"),
+    archive_database_url: str = Form(""),
+    archive_enabled: str = Form("false"),
+    archive_cron: str = Form("0 2 * * 1"),
     db: Session = Depends(get_db),
 ):
     redirect = require_admin(request)
@@ -1054,6 +1383,9 @@ def admin_settings_post(
     crud.upsert_setting(db, "news_crawler_cron", news_crawler_cron)
     crud.upsert_setting(db, "news_crawler_interval_minutes", news_crawler_interval_minutes)
     crud.upsert_setting(db, "news_crawler_limit", news_crawler_limit)
+    crud.upsert_setting(db, "news_target_count", news_target_count)
+    crud.upsert_setting(db, "news_dedupe_max_rounds", news_dedupe_max_rounds)
+    crud.upsert_setting(db, "news_dedupe_max_candidates", news_dedupe_max_candidates)
     crud.upsert_setting(db, "news_source_rss", news_source_rss)
     crud.upsert_setting(db, "news_source_mcp", news_source_mcp)
     crud.upsert_setting(db, "news_source_feeds", news_source_feeds)
@@ -1075,7 +1407,12 @@ def admin_settings_post(
     crud.upsert_setting(db, "ai_route_news", ai_route_news)
     crud.upsert_setting(db, "ai_route_weather", ai_route_weather)
     crud.upsert_setting(db, "ai_route_schedule", ai_route_schedule)
+    if archive_database_url:
+        crud.upsert_setting(db, "archive_database_url", archive_database_url)
+    crud.upsert_setting(db, "archive_enabled", archive_enabled)
+    crud.upsert_setting(db, "archive_cron", archive_cron)
     configure_news_scheduler(db)
+    configure_archive_scheduler(db)
     return RedirectResponse(url="/admin/settings", status_code=status.HTTP_302_FOUND)
 
 
@@ -1373,6 +1710,44 @@ async def admin_task_schedule_analyze(
         payload_json=json.dumps(payload, ensure_ascii=False),
     )
     return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message, "log_excerpt": run.log_excerpt, "task_run_id": run.id}
+
+
+@app.post("/admin/api/archive/run")
+async def admin_archive_run(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    start = time.time()
+    error_message = ""
+    status_text = "success"
+    result = {}
+    try:
+        result = run_archive_job(force_run=True)
+    except Exception as exc:
+        status_text = "failed"
+        error_message = str(exc)
+    duration_ms = int((time.time() - start) * 1000)
+    run = crud.create_task_run(
+        db,
+        task_type="archive_manual",
+        status=status_text,
+        duration_ms=duration_ms,
+        error_message=error_message,
+        log_excerpt=json.dumps(result, ensure_ascii=False),
+        payload_json=json.dumps({}, ensure_ascii=False),
+    )
+    return {"status": status_text, "duration_ms": duration_ms, "error_message": error_message, "log_excerpt": run.log_excerpt, "task_run_id": run.id}
+
+
+@app.post("/admin/api/archive/test")
+async def admin_archive_test(request: Request, db: Session = Depends(get_db)):
+    require_admin_json(request)
+    archive_session = get_archive_session(db)
+    if not archive_session:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ARCHIVE_DB_NOT_CONFIGURED")
+    try:
+        archive_session.execute(text("SELECT 1"))
+    finally:
+        archive_session.close()
+    return {"status": "success"}
 
 
 @app.get("/admin/api/scheduler")

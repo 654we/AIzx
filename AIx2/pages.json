@@ -55,6 +55,12 @@
       }
     },
     {
+      "path": "pages/news/archive",
+      "style": {
+        "navigationBarTitleText": "归档资讯"
+      }
+    },
+    {
       "path": "pages/mine/profile",
       "style": {
         "navigationBarTitleText": "账号信息"

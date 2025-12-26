@@ -45,6 +45,12 @@
       <input type="text" name="news_crawler_interval_minutes" value="{{ settings.news_crawler_interval_minutes }}" />
       <label>资讯抓取条数上限</label>
       <input type="text" name="news_crawler_limit" value="{{ settings.news_crawler_limit }}" />
+      <label>资讯目标入库条数</label>
+      <input type="text" name="news_target_count" value="{{ settings.news_target_count }}" />
+      <label>资讯去重最大轮次</label>
+      <input type="text" name="news_dedupe_max_rounds" value="{{ settings.news_dedupe_max_rounds }}" />
+      <label>资讯去重候选上限</label>
+      <input type="text" name="news_dedupe_max_candidates" value="{{ settings.news_dedupe_max_candidates }}" />
       <label>资讯来源：RSS（true/false）</label>
       <input type="text" name="news_source_rss" value="{{ settings.news_source_rss }}" />
       <label>资讯来源：MCP（true/false）</label>
@@ -89,6 +95,13 @@
       <input type="text" name="ai_route_weather" value="{{ settings.ai_route_weather }}" />
       <label>日程模块 Provider（deepseek/glm/openai）</label>
       <input type="text" name="ai_route_schedule" value="{{ settings.ai_route_schedule }}" />
+      <h3>归档配置</h3>
+      <label>归档数据库 URL（如 mysql+pymysql://user:pass@host:3306/db）</label>
+      <input type="text" name="archive_database_url" placeholder="{{ settings.archive_database_url }}" value="" />
+      <label>归档开关（true/false）</label>
+      <input type="text" name="archive_enabled" value="{{ settings.archive_enabled }}" />
+      <label>归档 cron（默认每周一凌晨）</label>
+      <input type="text" name="archive_cron" value="{{ settings.archive_cron }}" />
       <button type="submit">保存设置</button>
     </form>
   </div>

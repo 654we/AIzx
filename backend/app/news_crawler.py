@@ -26,6 +26,21 @@ def parse_feed(url: str) -> Iterable[dict]:
         }
 
 
+def collect_feed_items(feed_urls: list[str], limit: int | None = None) -> list[dict]:
+    items: list[dict] = []
+    for url in feed_urls:
+        try:
+            for item in parse_feed(url):
+                if not item["url"]:
+                    continue
+                items.append(item)
+                if limit is not None and len(items) >= limit:
+                    return items
+        except Exception as exc:
+            logger.exception("Feed collect failed: %s", exc)
+    return items
+
+
 def crawl_feeds(db: Session, feed_urls: list[str], summarize, limit: int | None = None) -> int:
     created = 0
     for url in feed_urls:

@@ -48,6 +48,10 @@ def create_news_item(
     url: str,
     published_at: str,
     tags: list[str],
+    content_hash: str = "",
+    dedupe_group_id: str = "",
+    dedupe_keep_reason: str = "",
+    dedupe_merged_urls: str = "[]",
 ) -> models.NewsItem:
     item = models.NewsItem(
         title=title,
@@ -56,6 +60,10 @@ def create_news_item(
         url=url,
         published_at=published_at,
         tags=",".join(tags),
+        content_hash=content_hash,
+        dedupe_group_id=dedupe_group_id,
+        dedupe_keep_reason=dedupe_keep_reason,
+        dedupe_merged_urls=dedupe_merged_urls,
     )
     db.add(item)
     db.commit()

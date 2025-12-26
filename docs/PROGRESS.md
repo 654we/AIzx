@@ -369,3 +369,28 @@
   - 验证第三方 MCP 流式返回结构与字段映射
 - 风险：
   - 远程 MCP 响应格式不符合 items 结构会导致解析失败
+
+## Fix Phase 9
+- 状态：已完成
+- 完成内容：
+  - 资讯去重凑满与 AI 优选入库（含去重记录字段）
+  - 新增归档 MySQL 连接配置与周归档任务（含手动触发/测试）
+  - 新增归档查询 API 与前端归档页面
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/news_crawler.py
+  - backend/app/mcp_search.py
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_tasks.html
+  - backend/requirements.txt
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/news/archive.vue
+  - AIx2/pages.json
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 验证归档 MySQL 连接与周归档数据完整性
+- 风险：
+  - 归档库未配置时归档/查询将返回 ARCHIVE_DB_NOT_CONFIGURED

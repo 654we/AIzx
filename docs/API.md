@@ -104,6 +104,17 @@ Authorization: Bearer <token>
 }
 ```
 
+### GET /api/archive/weeks
+- 说明：获取归档可选周（需登录）
+- Response:
+```json
+{ "weeks": ["2024-W40", "2024-W39"], "default": "2024-W40" }
+```
+
+### GET /api/archive/news?week=&page=&page_size=
+- 说明：获取归档周资讯（需登录）
+- Response 同 /api/news
+
 ## 天气
 ### GET /api/weather?location=
 - Response:

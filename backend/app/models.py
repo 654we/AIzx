@@ -1,7 +1,7 @@
 from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy import Text
 
-from app.database import Base
+from app.database import Base, ArchiveBase
 
 
 class User(Base):
@@ -30,6 +30,10 @@ class NewsItem(Base):
     url = Column(String(512), unique=True, nullable=False)
     published_at = Column(String(64), nullable=False)
     tags = Column(String(256), default="")
+    content_hash = Column(String(64), default="", index=True)
+    dedupe_group_id = Column(String(64), default="")
+    dedupe_keep_reason = Column(Text, default="")
+    dedupe_merged_urls = Column(Text, default="[]")
 
 
 class NewsPreview(Base):
@@ -129,3 +133,17 @@ class MCPLocalPlugin(Base):
     timeout_sec = Column(Integer, default=10)
     enabled = Column(Boolean, default=True)
     priority = Column(Integer, default=1)
+
+
+class ArchiveNewsItem(ArchiveBase):
+    __tablename__ = "archive_news_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(256), nullable=False)
+    summary = Column(String(512), nullable=False)
+    source = Column(String(128), nullable=False)
+    url = Column(String(512), nullable=False, index=True)
+    published_at = Column(String(64), nullable=False)
+    tags = Column(String(256), default="")
+    content_hash = Column(String(64), default="")
+    archive_week = Column(String(16), nullable=False, index=True)
