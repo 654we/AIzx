@@ -262,3 +262,18 @@
   - Phase 3 天气多 Provider failover + 国内 Provider 落地
 - 风险：
   - Cron 表达式需管理员正确输入，否则调度创建可能失败
+
+## Fix Phase 3
+- 状态：已完成
+- 完成内容：
+  - 天气 Provider 抽象接入 failover（按优先级依次尝试）
+  - 默认注入 Open-Meteo 与高德天气模板（高德默认禁用，需配置 key）
+  - 天气 Provider 测试改为真实调用并支持 test_location
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_weather.html
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 4 资讯详情改造（preview 概况 + 前端详情页）
+- 风险：
+  - 高德/第三方 Provider 需要有效 key 才可用

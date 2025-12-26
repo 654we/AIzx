@@ -47,6 +47,33 @@ def _ensure_setting(db: Session, key: str, default: str) -> None:
         crud.upsert_setting(db, key, default)
 
 
+def ensure_default_weather_providers(db: Session) -> None:
+    if crud.list_weather_providers(db):
+        return
+    crud.create_weather_provider(
+        db,
+        name="Open-Meteo",
+        provider_type="open-meteo",
+        base_url=settings.weather_api_url,
+        api_key="",
+        timeout_sec=5,
+        enabled=True,
+        priority=1,
+        extra_config=json.dumps({"geo_url": settings.weather_geo_url}, ensure_ascii=False),
+    )
+    crud.create_weather_provider(
+        db,
+        name="高德天气",
+        provider_type="gaode",
+        base_url="https://restapi.amap.com/v3/weather/weatherInfo",
+        api_key="",
+        timeout_sec=5,
+        enabled=False,
+        priority=2,
+        extra_config=json.dumps({"extensions": "base", "test_location": "上海"}, ensure_ascii=False),
+    )
+
+
 def configure_news_scheduler(db: Session) -> dict:
     _ensure_setting(db, "news_crawler_enabled", "false")
     _ensure_setting(db, "news_crawler_cron", "")
@@ -88,6 +115,7 @@ def startup_event() -> None:
         admin = crud.get_user_by_username(db, "admin")
         if not admin:
             crud.create_user(db, "admin", "admin", is_admin=True)
+        ensure_default_weather_providers(db)
         existing_news = db.query(models.NewsItem).count()
         if existing_news == 0:
             crud.create_news_item(
@@ -183,18 +211,13 @@ def travel_advice_from_ai(db: Session, condition: str, temp_c: float, aqi: int) 
         return travel_advice_for(condition, temp_c, aqi)
 
 
-def fetch_weather(db: Session, location: str) -> schemas.WeatherResponse:
-    if not location:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Location required")
-    try:
-        geo_resp = httpx.get(
-            settings.weather_geo_url,
-            params={"name": location, "count": 1, "language": "zh", "format": "json"},
-            timeout=5.0,
-        )
-        geo_resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Geo request failed") from exc
+def _fetch_open_meteo(location: str, geo_url: str, api_url: str, timeout: float) -> schemas.WeatherResponse:
+    geo_resp = httpx.get(
+        geo_url,
+        params={"name": location, "count": 1, "language": "zh", "format": "json"},
+        timeout=timeout,
+    )
+    geo_resp.raise_for_status()
     geo_data = geo_resp.json()
     results = geo_data.get("results") or []
     if not results:
@@ -203,20 +226,17 @@ def fetch_weather(db: Session, location: str) -> schemas.WeatherResponse:
     lat = info.get("latitude")
     lon = info.get("longitude")
     name = info.get("name")
-    try:
-        weather_resp = httpx.get(
-            settings.weather_api_url,
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
-                "timezone": "Asia/Shanghai",
-            },
-            timeout=5.0,
-        )
-        weather_resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Weather request failed") from exc
+    weather_resp = httpx.get(
+        api_url,
+        params={
+            "latitude": lat,
+            "longitude": lon,
+            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+            "timezone": "Asia/Shanghai",
+        },
+        timeout=timeout,
+    )
+    weather_resp.raise_for_status()
     weather_data = weather_resp.json()
     current = weather_data.get("current") or {}
     temp_c = float(current.get("temperature_2m", 0))
@@ -243,8 +263,99 @@ def fetch_weather(db: Session, location: str) -> schemas.WeatherResponse:
             aqi_desc=aqi_desc,
             updated_at=current.get("time", ""),
         ),
-        travel_advice=travel_advice_from_ai(db, condition, temp_c, aqi),
+        travel_advice=[],
     )
+
+
+def _fetch_gaode(location: str, base_url: str, api_key: str, timeout: float) -> schemas.WeatherResponse:
+    if not api_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gaode api_key missing")
+    response = httpx.get(
+        base_url,
+        params={"key": api_key, "city": location, "extensions": "base"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+    lives = data.get("lives") or []
+    if not lives:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
+    info = lives[0]
+    condition = info.get("weather", "晴")
+    temp_c = float(info.get("temperature", 0))
+    humidity = int(info.get("humidity", 0))
+    wind = f"{info.get('winddirection', '')}{info.get('windpower', '')}"
+    aqi = 60
+    aqi_desc = aqi_description(aqi)
+    return schemas.WeatherResponse(
+        location=schemas.WeatherLocation(name=info.get("city", location), lat=0.0, lon=0.0),
+        weather=schemas.WeatherInfo(
+            condition=condition,
+            temp_c=temp_c,
+            humidity=humidity,
+            wind=wind,
+            aqi=aqi,
+            aqi_desc=aqi_desc,
+            updated_at=info.get("reporttime", ""),
+        ),
+        travel_advice=[],
+    )
+
+
+def fetch_weather(db: Session, location: str) -> schemas.WeatherResponse:
+    if not location:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Location required")
+    providers = [
+        provider for provider in crud.list_weather_providers(db) if provider.enabled
+    ]
+    errors = []
+    for provider in providers:
+        try:
+            extra = json.loads(provider.extra_config or "{}")
+            if provider.provider_type == "open-meteo":
+                response = _fetch_open_meteo(
+                    location,
+                    geo_url=extra.get("geo_url", settings.weather_geo_url),
+                    api_url=provider.base_url,
+                    timeout=float(provider.timeout_sec or 5),
+                )
+            elif provider.provider_type == "gaode":
+                response = _fetch_gaode(
+                    location,
+                    base_url=provider.base_url,
+                    api_key=provider.api_key,
+                    timeout=float(provider.timeout_sec or 5),
+                )
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported provider")
+            response.travel_advice = travel_advice_from_ai(
+                db,
+                response.weather.condition,
+                response.weather.temp_c,
+                response.weather.aqi,
+            )
+            return response
+        except Exception as exc:
+            errors.append(f"{provider.provider_type}:{exc}")
+            continue
+    if not providers:
+        try:
+            response = _fetch_open_meteo(
+                location,
+                geo_url=settings.weather_geo_url,
+                api_url=settings.weather_api_url,
+                timeout=5.0,
+            )
+            response.travel_advice = travel_advice_from_ai(
+                db,
+                response.weather.condition,
+                response.weather.temp_c,
+                response.weather.aqi,
+            )
+            return response
+        except Exception as exc:
+            errors.append(f"open-meteo:{exc}")
+    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Weather providers failed: " + " | ".join(errors))
 
 
 def build_schedule_plan(source_filename: str) -> schemas.ScheduleResponse:
@@ -1271,11 +1382,35 @@ def admin_api_weather_provider_test(provider_id: int, request: Request, db: Sess
     start = time.time()
     status_text = "success"
     error_message = ""
+    test_location = "上海"
     try:
-        httpx.get(provider.base_url, timeout=provider.timeout_sec)
-    except Exception as exc:
+        extra = json.loads(provider.extra_config or "{}")
+        test_location = extra.get("test_location", test_location)
+    except json.JSONDecodeError:
+        error_message = "extra_config JSON 格式错误"
         status_text = "failed"
-        error_message = str(exc)
+    if status_text == "success":
+        try:
+            extra = json.loads(provider.extra_config or "{}")
+            if provider.provider_type == "open-meteo":
+                _fetch_open_meteo(
+                    test_location,
+                    geo_url=extra.get("geo_url", settings.weather_geo_url),
+                    api_url=provider.base_url,
+                    timeout=float(provider.timeout_sec or 5),
+                )
+            elif provider.provider_type == "gaode":
+                _fetch_gaode(
+                    test_location,
+                    base_url=provider.base_url,
+                    api_key=provider.api_key,
+                    timeout=float(provider.timeout_sec or 5),
+                )
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported provider")
+        except Exception as exc:
+            status_text = "failed"
+            error_message = str(exc)
     duration_ms = int((time.time() - start) * 1000)
     return {"status": status_text, "provider": provider.provider_type, "duration_ms": duration_ms, "error_message": error_message, "failover_count": 0}
 
