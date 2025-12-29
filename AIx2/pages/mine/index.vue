@@ -9,11 +9,11 @@
     </view>
 
     <view class="card">
-      <view class="row">
+      <view class="row" @click="goProfile">
         <text>账号信息</text>
         <text class="arrow">›</text>
       </view>
-      <view class="row">
+      <view class="row" @click="goSubscriptions">
         <text>订阅标签</text>
         <text class="arrow">›</text>
       </view>
@@ -73,6 +73,21 @@ export default {
     },
     goLocation() {
       uni.navigateTo({ url: '/pages/location/index' })
+    },
+    ensureLogin() {
+      if (!this.isLoggedIn) {
+        uni.showToast({ title: '请先登录', icon: 'none' })
+        return false
+      }
+      return true
+    },
+    goProfile() {
+      if (!this.ensureLogin()) return
+      uni.navigateTo({ url: '/pages/mine/profile' })
+    },
+    goSubscriptions() {
+      if (!this.ensureLogin()) return
+      uni.navigateTo({ url: '/pages/mine/subscriptions' })
     }
   }
 }

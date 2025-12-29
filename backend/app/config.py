@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     weather_geo_url: str = "https://geocoding-api.open-meteo.com/v1/search"
     weather_api_url: str = "https://api.open-meteo.com/v1/forecast"
     admin_session_secret: str = "change_me_admin"
+    archive_database_url: str = ""
 
     class Config:
         env_file = ".env"

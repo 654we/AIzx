@@ -1,0 +1,1 @@
+"""MCP plugin registry package."""

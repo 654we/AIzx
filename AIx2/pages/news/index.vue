@@ -4,7 +4,10 @@
       <text class="title">资讯</text>
       <text class="subtitle">关注你关心的内容</text>
     </view>
-    <view class="card" v-for="item in items" :key="item.id" @click="openLink(item.url)">
+    <view class="actions">
+      <button class="ghost" @click="goArchive">归档查询</button>
+    </view>
+    <view class="card" v-for="item in items" :key="item.id" @click="openDetail(item)">
       <text class="card-title">{{ item.title }}</text>
       <text class="card-summary">{{ item.summary }}</text>
       <view class="card-meta">
@@ -58,9 +61,13 @@ export default {
       this.page += 1
       this.fetchNews()
     },
-    openLink(url) {
-      if (!url) return
-      uni.navigateTo({ url: `/pages/webview/index?url=${encodeURIComponent(url)}` })
+    openDetail(item) {
+      if (!item) return
+      const url = item.url ? encodeURIComponent(item.url) : ''
+      uni.navigateTo({ url: `/pages/news/detail?id=${item.id || ''}&url=${url}` })
+    },
+    goArchive() {
+      uni.navigateTo({ url: '/pages/news/archive' })
     }
   }
 }
@@ -74,6 +81,14 @@ export default {
 }
 .header {
   margin-bottom: 24rpx;
+}
+.actions {
+  margin-bottom: 20rpx;
+}
+.ghost {
+  background: #fff;
+  color: #1c1d1f;
+  border: 1rpx solid #e5e7eb;
 }
 .title {
   font-size: 36rpx;

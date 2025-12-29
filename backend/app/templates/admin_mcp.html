@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP 配置</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 980px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; }
+    input { width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #e5e7eb; }
+    button { padding: 6px 10px; border: none; border-radius: 6px; background: #1c1d1f; color: #fff; }
+    .section { margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/news">资讯管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>MCP 配置</h2>
+
+    <div class="section">
+      <h3>远程 MCP</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>Base URL</th>
+            <th>协议</th>
+            <th>鉴权类型</th>
+            <th>鉴权值</th>
+            <th>额外配置(JSON)</th>
+            <th>超时</th>
+            <th>启用</th>
+            <th>优先级</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for remote in remotes %}
+          <tr data-id="{{ remote.id }}" class="remote-row">
+            <td><input value="{{ remote.name }}" class="name" /></td>
+            <td><input value="{{ remote.base_url }}" class="base_url" /></td>
+            <td><input value="{{ remote.protocol }}" class="protocol" /></td>
+            <td><input value="{{ remote.auth_type }}" class="auth_type" /></td>
+            <td><input value="{{ remote.auth_value }}" class="auth_value" /></td>
+            <td><input value="{{ remote.extra_config }}" class="extra_config" /></td>
+            <td><input value="{{ remote.timeout_sec }}" class="timeout_sec" /></td>
+            <td><input value="{{ 'true' if remote.enabled else 'false' }}" class="enabled" /></td>
+            <td><input value="{{ remote.priority }}" class="priority" /></td>
+            <td>
+              <button onclick="updateRemote({{ remote.id }})">保存</button>
+              <button onclick="testRemote({{ remote.id }})">测试</button>
+              <button onclick="deleteRemote({{ remote.id }})">删除</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h4>新增远程 MCP</h4>
+      <div>
+        <input id="remoteName" placeholder="名称" />
+        <input id="remoteUrl" placeholder="Base URL" />
+        <input id="remoteProtocol" placeholder="protocol" value="http" />
+        <input id="remoteAuthType" placeholder="auth_type" value="none" />
+        <input id="remoteAuthValue" placeholder="auth_value" />
+        <input id="remoteExtra" placeholder='{"payload_template": {"query": "{query}", "limit": "{limit}"}}' />
+        <input id="remoteTimeout" placeholder="timeout_sec" value="10" />
+        <input id="remoteEnabled" placeholder="enabled" value="true" />
+        <input id="remotePriority" placeholder="priority" value="1" />
+        <button onclick="createRemote()">新增</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>本地 MCP 插件</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>模块路径</th>
+            <th>命令</th>
+            <th>参数(JSON)</th>
+            <th>环境变量(JSON)</th>
+            <th>能力(JSON)</th>
+            <th>Schema(JSON)</th>
+            <th>超时</th>
+            <th>启用</th>
+            <th>优先级</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for local in locals %}
+          <tr data-id="{{ local.id }}" class="local-row">
+            <td><input value="{{ local.name }}" class="name" /></td>
+            <td><input value="{{ local.module_path }}" class="module_path" /></td>
+            <td><input value="{{ local.command }}" class="command" /></td>
+            <td><input value="{{ local.args }}" class="args" /></td>
+            <td><input value="{{ local.env }}" class="env" /></td>
+            <td><input value="{{ local.capabilities }}" class="capabilities" /></td>
+            <td><input value="{{ local.schema }}" class="schema" /></td>
+            <td><input value="{{ local.timeout_sec }}" class="timeout_sec" /></td>
+            <td><input value="{{ 'true' if local.enabled else 'false' }}" class="enabled" /></td>
+            <td><input value="{{ local.priority }}" class="priority" /></td>
+            <td>
+              <button onclick="updateLocal({{ local.id }})">保存</button>
+              <button onclick="testLocal({{ local.id }})">测试</button>
+              <button onclick="deleteLocal({{ local.id }})">删除</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h4>新增本地 MCP</h4>
+      <div>
+        <input id="localName" placeholder="名称" />
+        <input id="localModule" placeholder="模块路径 app.mcp.providers.demo" />
+        <input id="localCommand" placeholder="命令，如 cmd 或 npx" />
+        <input id="localArgs" placeholder='["/c","npx","bing-cn-mcp"]' />
+        <input id="localEnv" placeholder='{"USER_AGENT": "..."}' />
+        <input id="localCapabilities" placeholder='["search"]' />
+        <input id="localSchema" placeholder='{"query": "string"}' />
+        <input id="localTimeout" placeholder="timeout_sec" value="10" />
+        <input id="localEnabled" placeholder="enabled" value="true" />
+        <input id="localPriority" placeholder="priority" value="1" />
+        <button onclick="createLocal()">新增</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function rowData(row) {
+      let extra = {};
+      try {
+        extra = JSON.parse(row.querySelector('.extra_config')?.value || '{}');
+      } catch (err) {
+        alert('远程 MCP 额外配置 JSON 格式错误');
+        throw err;
+      }
+      return {
+        name: row.querySelector('.name').value,
+        base_url: row.querySelector('.base_url')?.value,
+        protocol: row.querySelector('.protocol')?.value || 'http',
+        auth_type: row.querySelector('.auth_type')?.value,
+        auth_value: row.querySelector('.auth_value')?.value,
+        extra_config: extra,
+        timeout_sec: Number(row.querySelector('.timeout_sec').value || 10),
+        enabled: row.querySelector('.enabled').value === 'true',
+        priority: Number(row.querySelector('.priority').value || 1)
+      };
+    }
+
+    async function createRemote() {
+      let extraConfig = {};
+      try {
+        extraConfig = JSON.parse(remoteExtra.value || '{}');
+      } catch (err) {
+        alert('远程 MCP 额外配置 JSON 格式错误');
+        return;
+      }
+      await fetch('/admin/api/mcp/remotes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: remoteName.value,
+          base_url: remoteUrl.value,
+          protocol: remoteProtocol.value,
+          auth_type: remoteAuthType.value,
+          auth_value: remoteAuthValue.value,
+          extra_config: extraConfig,
+          timeout_sec: Number(remoteTimeout.value || 10),
+          enabled: remoteEnabled.value === 'true',
+          priority: Number(remotePriority.value || 1)
+        })
+      });
+      location.reload();
+    }
+
+    async function updateRemote(id) {
+      const row = document.querySelector(`tr.remote-row[data-id='${id}']`);
+      try {
+        await fetch(`/admin/api/mcp/remotes/${id}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(rowData(row))
+        });
+      } catch (err) {
+        return;
+      }
+      location.reload();
+    }
+
+    async function deleteRemote(id) {
+      await fetch(`/admin/api/mcp/remotes/${id}`, {method: 'DELETE'});
+      location.reload();
+    }
+
+    async function testRemote(id) {
+      const response = await fetch(`/admin/api/mcp/remotes/${id}/test`, {method: 'POST'});
+      alert(JSON.stringify(await response.json()));
+    }
+
+    async function createLocal() {
+      let args = [];
+      let env = {};
+      try {
+        args = JSON.parse(localArgs.value || '[]');
+        env = JSON.parse(localEnv.value || '{}');
+      } catch (err) {
+        alert('本地 MCP 参数或环境变量 JSON 格式错误');
+        return;
+      }
+      await fetch('/admin/api/mcp/locals', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: localName.value,
+          module_path: localModule.value,
+          command: localCommand.value,
+          args: args,
+          env: env,
+          capabilities: JSON.parse(localCapabilities.value || '[]'),
+          schema: JSON.parse(localSchema.value || '{}'),
+          timeout_sec: Number(localTimeout.value || 10),
+          enabled: localEnabled.value === 'true',
+          priority: Number(localPriority.value || 1)
+        })
+      });
+      location.reload();
+    }
+
+    async function updateLocal(id) {
+      const row = document.querySelector(`tr.local-row[data-id='${id}']`);
+      let args = [];
+      let env = {};
+      try {
+        args = JSON.parse(row.querySelector('.args').value || '[]');
+        env = JSON.parse(row.querySelector('.env').value || '{}');
+      } catch (err) {
+        alert('本地 MCP 参数或环境变量 JSON 格式错误');
+        return;
+      }
+      await fetch(`/admin/api/mcp/locals/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: row.querySelector('.name').value,
+          module_path: row.querySelector('.module_path').value,
+          command: row.querySelector('.command').value,
+          args: args,
+          env: env,
+          capabilities: JSON.parse(row.querySelector('.capabilities').value || '[]'),
+          schema: JSON.parse(row.querySelector('.schema').value || '{}'),
+          timeout_sec: Number(row.querySelector('.timeout_sec').value || 10),
+          enabled: row.querySelector('.enabled').value === 'true',
+          priority: Number(row.querySelector('.priority').value || 1)
+        })
+      });
+      location.reload();
+    }
+
+    async function deleteLocal(id) {
+      await fetch(`/admin/api/mcp/locals/${id}`, {method: 'DELETE'});
+      location.reload();
+    }
+
+    async function testLocal(id) {
+      const response = await fetch(`/admin/api/mcp/locals/${id}/test`, {method: 'POST'});
+      alert(JSON.stringify(await response.json()));
+    }
+  </script>
+</body>
+</html>

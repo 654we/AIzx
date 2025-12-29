@@ -215,3 +215,253 @@
   - docs/PROGRESS.md
 - 下一步：
   - 增加告警/通知机制
+
+## Fix Phase 1
+- 状态：已完成
+- 完成内容：
+  - 输出 docs/PLAN_FIX.md（本轮修复增强规划）
+  - 更新 docs/API.md 增量接口草案
+  - 提供接口一致性清单（PLAN_FIX 中）
+- 文件清单：
+  - docs/PLAN_FIX.md
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 2 管理后台增强（手动触发、定时任务、用户 CRUD、MCP/天气配置）
+- 风险：
+  - 后续接口变更需严格同步前端与文档
+
+## Fix Phase 2
+- 状态：已完成
+- 完成内容：
+  - 管理后台新增任务触发、定时任务配置、MCP 管理、天气 Provider 管理页面
+  - 新增 admin API：任务触发、scheduler 配置、MCP/天气/用户 CRUD
+  - MCP 远程配置支持多实例与测试，本地插件支持注册与测试
+  - 用户管理支持搜索、详情、启用/停用、重置密码、订阅标签编辑
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/schemas.py
+  - backend/app/mcp/registry.py
+  - backend/app/mcp/providers/demo.py
+  - backend/app/mcp/providers/__init__.py
+  - backend/app/mcp/__init__.py
+  - backend/app/news_crawler.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_users.html
+  - backend/app/templates/admin_news.html
+  - backend/app/templates/admin_tasks.html
+  - backend/app/templates/admin_scheduler.html
+  - backend/app/templates/admin_mcp.html
+  - backend/app/templates/admin_weather.html
+  - backend/app/templates/admin_user_detail.html
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 3 天气多 Provider failover + 国内 Provider 落地
+- 风险：
+  - Cron 表达式需管理员正确输入，否则调度创建可能失败
+
+## Fix Phase 3
+- 状态：已完成
+- 完成内容：
+  - 天气 Provider 抽象接入 failover（按优先级依次尝试）
+  - 默认注入 Open-Meteo 与高德天气模板（高德默认禁用，需配置 key）
+  - 天气 Provider 测试改为真实调用并支持 test_location
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_weather.html
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 4 资讯详情改造（preview 概况 + 前端详情页）
+- 风险：
+  - 高德/第三方 Provider 需要有效 key 才可用
+
+## Fix Phase 4
+- 状态：已完成
+- 完成内容：
+  - 新增资讯预览接口并支持缓存（news_id 或 url）
+  - 前端资讯详情改为展示智能概况 + 来源链接与操作按钮
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/schemas.py
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/news/detail.vue
+  - AIx2/pages.json
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 5 日程文件上传增强（doc/docx/xls/xlsx/csv）
+- 风险：
+  - 资讯源站访问受限时预览可能失败，需要前端提示与重试
+
+## Fix Phase 5
+- 状态：已完成
+- 完成内容：
+  - 日程上传支持 doc/docx/xls/xlsx/csv/txt/md 解析与元数据记录
+  - 后端增加文本解析与日程校验排序逻辑
+  - 前端上传扩展格式并显示上传进度
+- 文件清单：
+  - backend/requirements.txt
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/schedule/index.vue
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase 6 我的页面补齐（资料编辑 + 订阅标签管理）
+- 风险：
+  - .doc 文档解析为兼容兜底，复杂格式可能解析不完整
+
+## Fix Phase 6
+- 状态：已完成
+- 完成内容：
+  - 新增账号信息编辑与订阅标签管理页面入口
+  - 后端支持用户资料更新、订阅标签获取与密码修改
+  - 用户模型补充邮箱/手机号/头像链接字段
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - AIx2/pages/mine/index.vue
+  - AIx2/pages/mine/profile.vue
+  - AIx2/pages/mine/subscriptions.vue
+  - AIx2/pages.json
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 全链路回归自测与文档补齐（如需）
+- 风险：
+  - 用户名冲突将返回 409，需要前端提示
+
+## Fix Phase 7
+- 状态：已完成
+- 完成内容：
+  - 定时任务配置对无效 cron 做容错并回退到间隔模式
+  - 管理后台显示调度错误提示
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_scheduler.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 继续全链路回归测试与缺陷修复
+- 风险：
+  - 需在后台提示管理员修正 cron 表达式
+
+## Fix Phase 8
+- 状态：已完成
+- 完成内容：
+  - MCP 远程配置新增 protocol 字段（支持 http 与 streamable_http）
+  - MCP 搜索支持解析 streamable_http 流式响应
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_mcp.html
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 验证第三方 MCP 流式返回结构与字段映射
+- 风险：
+  - 远程 MCP 响应格式不符合 items 结构会导致解析失败
+
+## Fix Phase 9
+- 状态：已完成
+- 完成内容：
+  - 资讯去重凑满与 AI 优选入库（含去重记录字段）
+  - 新增归档 MySQL 连接配置与周归档任务（含手动触发/测试）
+  - 新增归档查询 API 与前端归档页面
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/crud.py
+  - backend/app/news_crawler.py
+  - backend/app/mcp_search.py
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_tasks.html
+  - backend/requirements.txt
+  - AIx2/pages/news/index.vue
+  - AIx2/pages/news/archive.vue
+  - AIx2/pages.json
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 验证归档 MySQL 连接与周归档数据完整性
+- 风险：
+  - 归档库未配置时归档/查询将返回 ARCHIVE_DB_NOT_CONFIGURED
+
+## Fix Phase A
+- 状态：已完成
+- 完成内容：
+  - 归档任务幂等（archive_week + url 唯一约束）
+  - 归档任务并发安全（全局锁避免手动与定时冲突）
+  - 归档周定义（Asia/Shanghai、周一为起始）
+  - 归档查询接口增强（week_start/week_end、stats.count、last_n_weeks）
+  - 增加 smoke.ps1 与最小 pytest 用例
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/main.py
+  - backend/app/database.py
+  - backend/requirements.txt
+  - backend/tests/test_archive_utils.py
+  - scripts/smoke.ps1
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - Phase B 归档查询 UI 优化（周折叠/周选择/加载更多/空态）
+- 风险：
+  - 归档库未配置时查询将返回 ARCHIVE_DB_NOT_CONFIGURED
+
+## Fix Phase B
+- 状态：已完成
+- 完成内容：
+  - 管理后台时间配置改为统一时间选择（新闻抓取/归档）
+  - 选择器自动转换为 cron 表达式并保留高级 cron 输入
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_settings.html
+  - backend/app/templates/admin_scheduler.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 继续回归测试 UI 表单保存逻辑
+- 风险：
+  - 同时填写 cron 与时间选择器时以时间选择器为准
+
+## Fix Phase C
+- 状态：已完成
+- 完成内容：
+  - MCP 远程配置支持 extra_config，用于自定义 headers 与 payload 模板
+  - 管理后台 MCP 表单支持配置 extra_config
+- 文件清单：
+  - backend/app/models.py
+  - backend/app/schemas.py
+  - backend/app/crud.py
+  - backend/app/main.py
+  - backend/app/mcp_search.py
+  - backend/app/templates/admin_mcp.html
+  - docs/API.md
+  - docs/PROGRESS.md
+- 下一步：
+  - 依据第三方 MCP 文档填写 payload_template 解决 400
+- 风险：
+  - extra_config JSON 格式错误会导致请求使用默认 payload
+
+## Fix Phase D
+- 状态：已完成
+- 完成内容：
+  - MCP 管理后台 JSON 校验增强，避免错误配置导致保存异常
+  - 本地 MCP 命令执行测试增加超时与 stderr 摘要
+- 文件清单：
+  - backend/app/main.py
+  - backend/app/templates/admin_mcp.html
+  - docs/PROGRESS.md
+- 下一步：
+  - 根据第三方 MCP CLI 输出规范补充解析适配（如需）
+- 风险：
+  - 命令执行依赖系统环境与 npx 可用性

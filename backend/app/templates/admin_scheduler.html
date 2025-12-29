@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>定时任务</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6f8; }
+    .container { width: 720px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; }
+    .nav { margin-bottom: 16px; }
+    .nav a { margin-right: 12px; color: #1c1d1f; text-decoration: none; }
+    label { display: block; margin-top: 12px; font-size: 14px; }
+    input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; }
+    button { margin-top: 16px; padding: 8px 12px; border: none; border-radius: 6px; background: #1c1d1f; color: #fff; }
+    .hint { font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/admin/settings">系统设置</a>
+      <a href="/admin/scheduler">定时任务</a>
+      <a href="/admin/tasks">任务触发</a>
+      <a href="/admin/mcp">MCP 配置</a>
+      <a href="/admin/weather">天气配置</a>
+      <a href="/admin/users">用户管理</a>
+      <a href="/admin/news">资讯管理</a>
+      <a href="/admin/logout">退出</a>
+    </div>
+    <h2>资讯定时任务</h2>
+    <p class="hint">下一次执行时间：{{ settings.next_run_at }}</p>
+    {% if settings.scheduler_error %}
+    <p class="hint" style="color:#b91c1c;">{{ settings.scheduler_error }}</p>
+    {% endif %}
+    <form method="post">
+      <label>启用（true/false）</label>
+      <input type="text" name="news_crawler_enabled" value="{{ settings.news_crawler_enabled }}" />
+      <label>Cron 表达式（五段式，优先于间隔）</label>
+      <input type="text" name="news_crawler_cron" value="{{ settings.news_crawler_cron }}" />
+      <label>抓取时间（统一时间选择）</label>
+      <input type="time" name="news_run_time" value="{{ settings.news_run_time }}" />
+      <label>抓取周期</label>
+      <select name="news_run_weekday">
+        <option value="daily" {% if settings.news_run_weekday == 'daily' %}selected{% endif %}>每天</option>
+        <option value="1" {% if settings.news_run_weekday == '1' %}selected{% endif %}>周一</option>
+        <option value="2" {% if settings.news_run_weekday == '2' %}selected{% endif %}>周二</option>
+        <option value="3" {% if settings.news_run_weekday == '3' %}selected{% endif %}>周三</option>
+        <option value="4" {% if settings.news_run_weekday == '4' %}selected{% endif %}>周四</option>
+        <option value="5" {% if settings.news_run_weekday == '5' %}selected{% endif %}>周五</option>
+        <option value="6" {% if settings.news_run_weekday == '6' %}selected{% endif %}>周六</option>
+        <option value="7" {% if settings.news_run_weekday == '7' %}selected{% endif %}>周日</option>
+      </select>
+      <label>间隔（分钟）</label>
+      <input type="text" name="news_crawler_interval_minutes" value="{{ settings.news_crawler_interval_minutes }}" />
+      <label>抓取条数上限</label>
+      <input type="text" name="news_crawler_limit" value="{{ settings.news_crawler_limit }}" />
+      <label>来源：RSS（true/false）</label>
+      <input type="text" name="news_source_rss" value="{{ settings.news_source_rss }}" />
+      <label>来源：MCP（true/false）</label>
+      <input type="text" name="news_source_mcp" value="{{ settings.news_source_mcp }}" />
+      <label>来源：订阅链接（true/false）</label>
+      <input type="text" name="news_source_feeds" value="{{ settings.news_source_feeds }}" />
+      <button type="submit">保存配置</button>
+    </form>
+  </div>
+</body>
+</html>

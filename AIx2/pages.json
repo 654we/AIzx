@@ -47,6 +47,30 @@
       "style": {
         "navigationBarTitleText": "资讯详情"
       }
+    },
+    {
+      "path": "pages/news/detail",
+      "style": {
+        "navigationBarTitleText": "资讯概况"
+      }
+    },
+    {
+      "path": "pages/news/archive",
+      "style": {
+        "navigationBarTitleText": "归档资讯"
+      }
+    },
+    {
+      "path": "pages/mine/profile",
+      "style": {
+        "navigationBarTitleText": "账号信息"
+      }
+    },
+    {
+      "path": "pages/mine/subscriptions",
+      "style": {
+        "navigationBarTitleText": "订阅标签"
+      }
     }
   ],
   "globalStyle": {
